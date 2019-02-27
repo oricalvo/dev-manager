@@ -1,0 +1,20 @@
+{
+  "name": "dev-manager",
+  "version": "1.0.7",
+  "main": "index.js",
+  "license": "MIT",
+  "bin": {
+    "dm": "dm.js"
+  },
+  "dependencies": {
+    "@types/node": "^11.9.5",
+    "express": "^4.16.4",
+    "oc-tools": "^1.0.44",
+    "typescript": "^3.3.3333"
+  },
+  "scripts": {
+    "pack": "node cli.js pack",
+    "patch": "node cli.js patch",
+    "start": "node cli.js dev"
+  }
+}
