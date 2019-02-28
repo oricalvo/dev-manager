@@ -1,7 +1,7 @@
 import {createLogger} from "./logger";
 import {WorkspaceConfig} from "./dtos";
-import {loadConfig} from "./config";
 import {BuildProxy} from "./proxy";
+import {loadConfigFrom} from "./config";
 
 const logger = createLogger("BuildAgent");
 
@@ -15,7 +15,7 @@ export class BuildAgent {
     async init() {
         logger.debug("init");
 
-        this.config = await loadConfig();
+        this.config = await loadConfigFrom(process.cwd());
 
         try {
             const proxy = new BuildProxy(this.config);

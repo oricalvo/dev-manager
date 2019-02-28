@@ -9,9 +9,7 @@ export interface Config {
     worksapce: string;
 }
 
-export async function loadConfig(): Promise<WorkspaceConfig> {
-    let dir = process.cwd();
-
+export async function loadConfigFrom(dir: string): Promise<WorkspaceConfig> {
     while(true) {
         const filePath = path.resolve(dir, "dm.conf");
         if(!await fileExists(filePath)) {

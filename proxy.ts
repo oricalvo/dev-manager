@@ -1,6 +1,6 @@
 import {httpRequest} from "./http.helpers";
 import {createLogger} from "./logger";
-import {AppRuntime, AppDTO, PingDTO, WorkspaceConfig} from "./dtos";
+import {AppRuntime, AppDTO, PingDTO, WorkspaceConfig, StartDTO, KillDTO} from "./dtos";
 
 const logger = createLogger("BuildProxy");
 
@@ -18,10 +18,10 @@ export class BuildProxy {
         return await this.sendHttpRequest<void>("POST", url, config);
     }
 
-    async getApps(): Promise<AppDTO[]> {
-        logger.debug("getApps");
+    async list(): Promise<AppDTO[]> {
+        logger.debug("list");
 
-        return await this.sendHttpRequest<AppDTO[]>("GET", "/" + this.config.name + "/app");
+        return await this.sendHttpRequest<AppDTO[]>("GET", "/" + this.config.name + "/list");
     }
 
     async initApp(appName: string, port?: number): Promise<void> {
@@ -53,19 +53,25 @@ export class BuildProxy {
 
     }
 
-    async kill(appName: string) {
-        logger.debug("kill", appName);
+    async kill(names: string[]) {
+        logger.debug("kill", names);
 
-        const url = "/" + this.config.name + "/" + appName + "/kill";
-        return await this.sendHttpRequest<void>("POST", url, {});
+        const url = "/" + this.config.name + "/kill";
+        const body: KillDTO = {
+            names,
+        }
+        return await this.sendHttpRequest<void>("POST", url, body);
     }
 
-    async restart(names: string[]) {
-        logger.debug("restart", names);
+    async restart(appName: string) {
+        logger.debug("restart", appName);
 
-        return await this.sendHttpRequest<void>("POST", "/app/restart", {
-            names,
-        });
+        const url = "/app/" + appName + "/restart";
+        const body: StartDTO = {
+            cwd: process.cwd(),
+        };
+
+        return await this.sendHttpRequest<void>("POST", url, body);
     }
 
     async debug(name: string) {

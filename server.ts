@@ -2,10 +2,21 @@ import * as express from "express";
 import {createLogger, createWinstonLogger, LOGGER} from "./logger";
 import {promisifyExpressApi} from "./express.helpers";
 import * as bodyParser from "body-parser";
-import {AppDTO, AppRuntime, AppStatus, ExitDTO, PingDTO, WorkspaceConfig, WorkspaceRuntime} from "./dtos";
+import {
+    AppDTO,
+    AppRuntime,
+    AppStatus,
+    ExitDTO, KillDTO,
+    ListDTO,
+    PingDTO,
+    StartDTO,
+    WorkspaceConfig,
+    WorkspaceRuntime
+} from "./dtos";
 import {registerService} from "oc-tools/serviceLocator";
 import {spawn} from "child_process";
 import {Mapper_App_AppDTO} from "./mappers";
+import {loadConfigFrom} from "./config";
 
 const logger = createLogger();
 
@@ -19,11 +30,13 @@ export function main() {
     app.use(bodyParser.json());
     app.use(bodyParser.text());
 
-    app.post("/api/:workspace/start", promisifyExpressApi(startWorkspace));
-    app.get("/api/:workspace/app", promisifyExpressApi(getApps));
+    app.post("/api/workspace/start", promisifyExpressApi(startWorkspace));
+    app.get("/api/:workspace/list", promisifyExpressApi(listApps));
+    // app.post("/api/:workspace/restart", promisifyExpressApi(restartAllApp));
     app.post("/api/:workspace/:app/ping", promisifyExpressApi(pingApp));
     app.post("/api/:workspace/:app/exit", promisifyExpressApi(exitApp));
-    app.post("/api/:workspace/:app/kill", promisifyExpressApi(killApp));
+    app.post("/api/:workspace/kill", promisifyExpressApi(killApp));
+    app.post("/api/app/:app/restart", promisifyExpressApi(restartApp));
     // app.post("/api/:worksapce/app/:name/init", promisifyExpressApi(initApp));
     // app.post("/api/app/restart", promisifyExpressApi(restartApps));
     // app.post("/api/app/debug", promisifyExpressApi(debugApp));
@@ -36,16 +49,16 @@ export function main() {
 }
 
 async function startWorkspace(req): Promise<AppDTO[]> {
-    logger.debug("getApps");
+    logger.debug("list");
 
     const name = req.params.workspace;
     if(!name) {
         throw new Error("workspace parameter is missing");
     }
 
-    const config: WorkspaceConfig = req.body;
+    const body: StartDTO = req.body;
 
-    const work = getOrCreateWorkspace(name);
+    const work = await getOrCreateWorkspace(body.cwd);
 
     for(const app of work.apps) {
         runApp(app);
@@ -54,15 +67,17 @@ async function startWorkspace(req): Promise<AppDTO[]> {
     return work.apps.map(Mapper_App_AppDTO);
 }
 
-async function getApps(req): Promise<AppDTO[]> {
-    logger.debug("getApps");
+async function listApps(req): Promise<AppDTO[]> {
+    logger.debug("listApps");
 
-    const name = req.params.workspace;
-    if(!name) {
+    const workspaceName: string = req.params.workspace;
+    if(!workspaceName) {
         throw new Error("workspace parameter is missing");
     }
 
-    const work = getOrCreateWorkspace(name);
+    const body: ListDTO = req.body;
+
+    const work = await getOrCreateWorkspace(workspaceName);
 
     return Array.from(work.apps.values()).map(app => ({
         name: app.name,
@@ -114,13 +129,72 @@ async function pingApp(req) {
         throw new Error("pid is missing");
     }
 
-    const app = getOrCreateApp(workspaceName, appName);
+    const app = await getOrCreateApp(workspaceName, appName);
     app.status = AppStatus.Running;
     app.port = body.port;
     app.pid = body.pid;
     app.error = null;
 
     app.message = "Ping ack received";
+}
+
+async function restartApp(req) {
+    logger.debug("restartApp", req.body);
+
+    const appName = req.params.app;
+    if(!appName) {
+        throw new Error("app is missing");
+    }
+
+    const body: StartDTO = req.body;
+    if(!body.cwd) {
+        throw new Error("Bad request, cwd is missing");
+    }
+
+    const app = await getOrCreateApp(body.cwd, appName);
+
+    if(app.pid) {
+        try {
+            process.kill(app.pid);
+        }
+        catch(err) {
+            logger.error(err);
+        }
+
+        app.pid = null;
+        app.status = AppStatus.Killed;
+        app.error = null;
+    }
+
+    runApp(app);
+}
+
+async function restartAllApp(req) {
+    logger.debug("restartApp", req.body);
+
+    const workspaceName = req.params.workspace;
+    if(!workspaceName) {
+        throw new Error("workspace is missing");
+    }
+
+    const appName = req.params.app;
+    if(!appName) {
+        throw new Error("app is missing");
+    }
+
+    const body: StartDTO = req.body;
+
+    const app = await getOrCreateApp(body.cwd, appName);
+
+    if(app.pid) {
+        process.kill(app.pid);
+    }
+
+    app.pid = null;
+    app.status = AppStatus.Killed;
+    app.error = null;
+
+    runApp(app);
 }
 
 async function exitApp(req) {
@@ -138,7 +212,7 @@ async function exitApp(req) {
 
     const body: ExitDTO = req.body;
 
-    const app = getOrCreateApp(workspaceName, appName);
+    const app = await getOrCreateApp(body.cwd, appName);
     app.pid = null;
     app.error = body.error;
     app.status = AppStatus.Exited;
@@ -152,20 +226,22 @@ async function killApp(req) {
         throw new Error("workspace is missing");
     }
 
-    const appName = req.params.app;
-    if(!appName) {
-        throw new Error("app is missing");
+    const body: KillDTO = req.body;
+    if(!body || !body.names || !body.names.length) {
+        throw new Error("names is missing");
     }
 
-    const app = getOrCreateApp(workspaceName, appName);
-    if(app.pid) {
-        logger.debug("process.kill", app.pid);
-        process.kill(app.pid);
+    for(const appName of body.names) {
+        const app = await getOrCreateApp(workspaceName, appName);
+        if (app.pid) {
+            logger.debug("process.kill", app.pid);
+            process.kill(app.pid);
 
-        app.status = AppStatus.Killed;
-        app.pid = null;
-        app.error = null;
-        app.message = null;
+            app.status = AppStatus.Killed;
+            app.pid = null;
+            app.error = null;
+            app.message = null;
+        }
     }
 }
 
@@ -286,23 +362,23 @@ function getWorkspace(name: string): WorkspaceRuntime {
     return app;
 }
 
-function getOrCreateWorkspace(name: string): WorkspaceRuntime {
-    let work= findWorkspace(name);
+async function getOrCreateWorkspace(workspaceName: string): Promise<WorkspaceRuntime> {
+    let work= findWorkspace(workspaceName);
     if(!work) {
         work = {
-            name,
+            name: workspaceName,
             config: null,
             apps: [],
         }
 
-        workspaces.set(name, work);
+        workspaces.set(workspaceName, work);
     }
 
     return work;
 }
 
-function getOrCreateApp(workspaceName: string, appName: string): AppRuntime {
-    const workspace = getOrCreateWorkspace(workspaceName);
+async function getOrCreateApp(workspaceName: string, appName: string): Promise<AppRuntime> {
+    const workspace = await getOrCreateWorkspace(workspaceName);
 
     let app = findApp(workspace, appName);
     if(!app) {

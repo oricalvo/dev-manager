@@ -58,5 +58,17 @@ export interface PingDTO {
 }
 
 export interface ExitDTO {
+    cwd: string;
     error: string;
+}
+
+export interface StartDTO {
+    cwd: string;
+}
+
+export interface KillDTO {
+    names: string[];
+}
+
+export interface ListDTO{
 }
