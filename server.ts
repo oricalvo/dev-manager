@@ -2,7 +2,7 @@ import * as express from "express";
 import {createLogger, createWinstonLogger, LOGGER} from "./logger";
 import {promisifyExpressApi} from "./express.helpers";
 import * as bodyParser from "body-parser";
-import {AppRuntime, AppDTO, AppStatus, WorkspaceRuntime, WorkspaceConfig} from "./dtos";
+import {AppDTO, AppRuntime, AppStatus, ExitDTO, PingDTO, WorkspaceConfig, WorkspaceRuntime} from "./dtos";
 import {registerService} from "oc-tools/serviceLocator";
 import {spawn} from "child_process";
 import {Mapper_App_AppDTO} from "./mappers";
@@ -21,17 +21,17 @@ export function main() {
 
     app.post("/api/:workspace/start", promisifyExpressApi(startWorkspace));
     app.get("/api/:workspace/app", promisifyExpressApi(getApps));
+    app.post("/api/:workspace/:app/ping", promisifyExpressApi(pingApp));
+    app.post("/api/:workspace/:app/exit", promisifyExpressApi(exitApp));
+    app.post("/api/:workspace/:app/kill", promisifyExpressApi(killApp));
     // app.post("/api/:worksapce/app/:name/init", promisifyExpressApi(initApp));
-    // app.post("/api/app/:name/ping", promisifyExpressApi(pingApp));
-    // app.post("/api/app/:name/exit", promisifyExpressApi(exitApp));
-    // app.post("/api/app/kill", promisifyExpressApi(killApps));
     // app.post("/api/app/restart", promisifyExpressApi(restartApps));
     // app.post("/api/app/debug", promisifyExpressApi(debugApp));
 
     // watchFS();
 
     app.listen(7070, function () {
-        logger.debug("Server is running");
+        logger.debug("Server is running on port 7070");
     });
 }
 
@@ -45,7 +45,7 @@ async function startWorkspace(req): Promise<AppDTO[]> {
 
     const config: WorkspaceConfig = req.body;
 
-    const work = getOrCreateWorkspace(name, config);
+    const work = getOrCreateWorkspace(name);
 
     for(const app of work.apps) {
         runApp(app);
@@ -62,7 +62,7 @@ async function getApps(req): Promise<AppDTO[]> {
         throw new Error("workspace parameter is missing");
     }
 
-    const work = getWorkspace(name);
+    const work = getOrCreateWorkspace(name);
 
     return Array.from(work.apps.values()).map(app => ({
         name: app.name,
@@ -96,62 +96,78 @@ async function getApps(req): Promise<AppDTO[]> {
 //     app.message = "Init ack received";
 // }
 
-// async function pingApp(req) {
-//     logger.debug("pingApp", req.body);
-//
-//     const name = req.params.name;
-//     if(!name) {
-//         throw new Error("name is missing");
-//     }
-//
-//     const body: App = req.body;
-//
-//     if(!body.pid) {
-//         throw new Error("pid is missing");
-//     }
-//
-//     const app = getApp(body.name);
-//     app.status = AppStatus.Running;
-//     app.port = body.port;
-//     app.pid = body.pid;
-//     app.error = null;
-//
-//     app.message = "Ping ack received";
-// }
+async function pingApp(req) {
+    logger.debug("ping", req.body);
 
-// async function exitApp(req) {
-//     logger.debug("exitApp", req.params.name, req.body);
-//
-//     const name = req.params.name;
-//     if(!name) {
-//         throw new Error("name parameter is missing");
-//     }
-//
-//     const body: ExitAppRequestDTO = req.body;
-//
-//     const app = getApp(name);
-//     app.pid = null;
-//     app.error = body.error;
-//     app.status = AppStatus.Exited;
-//
-//     if(app.error) {
-//         app.message = "Error reported by app";
-//     }
-//     else {
-//         app.message = "Exit reported by app";
-//     }
-// }
+    const workspaceName = req.params.workspace;
+    if(!workspaceName) {
+        throw new Error("workspace is missing");
+    }
 
-// async function killApps(req) {
-//     logger.debug("killApps", req.body);
-//
-//     const body: KillApps = req.body;
-//     const names = body.names || apps.keys();
-//
-//     for(const name of names) {
-//         killApp(name, "Killed by user");
-//     }
-// }
+    const appName = req.params.app;
+    if(!appName) {
+        throw new Error("app is missing");
+    }
+
+    const body: PingDTO = req.body;
+    if(!body.pid) {
+        throw new Error("pid is missing");
+    }
+
+    const app = getOrCreateApp(workspaceName, appName);
+    app.status = AppStatus.Running;
+    app.port = body.port;
+    app.pid = body.pid;
+    app.error = null;
+
+    app.message = "Ping ack received";
+}
+
+async function exitApp(req) {
+    logger.debug("exit", req.params.name, req.body);
+
+    const workspaceName = req.params.workspace;
+    if(!workspaceName) {
+        throw new Error("workspace is missing");
+    }
+
+    const appName = req.params.app;
+    if(!appName) {
+        throw new Error("app is missing");
+    }
+
+    const body: ExitDTO = req.body;
+
+    const app = getOrCreateApp(workspaceName, appName);
+    app.pid = null;
+    app.error = body.error;
+    app.status = AppStatus.Exited;
+}
+
+async function killApp(req) {
+    logger.debug("killApp", req.params.app);
+
+    const workspaceName = req.params.workspace;
+    if(!workspaceName) {
+        throw new Error("workspace is missing");
+    }
+
+    const appName = req.params.app;
+    if(!appName) {
+        throw new Error("app is missing");
+    }
+
+    const app = getOrCreateApp(workspaceName, appName);
+    if(app.pid) {
+        logger.debug("process.kill", app.pid);
+        process.kill(app.pid);
+
+        app.status = AppStatus.Killed;
+        app.pid = null;
+        app.error = null;
+        app.message = null;
+    }
+}
 
 // async function restartApps(req) {
 //     logger.debug("restartApps", req.body);
@@ -229,14 +245,14 @@ async function getApps(req): Promise<AppDTO[]> {
 //     }
 // }
 
-function findApp(work: WorkspaceRuntime, name: string) {
-    const app = work.apps.find(app => app.name.toLowerCase() == name.toLowerCase());
-    if(!app) {
-        return null;
-    }
-
-    return app;
-}
+// function findApp(work: WorkspaceRuntime, name: string) {
+//     const app = work.apps.find(app => app.name.toLowerCase() == name.toLowerCase());
+//     if(!app) {
+//         return null;
+//     }
+//
+//     return app;
+// }
 
 function findWorkspace(name: string): WorkspaceRuntime {
     const app = workspaces.get(name.toLowerCase());
@@ -244,6 +260,11 @@ function findWorkspace(name: string): WorkspaceRuntime {
         return null;
     }
 
+    return app;
+}
+
+function findApp(workspace: WorkspaceRuntime, appName: string): AppRuntime {
+    const app = workspace.apps.find(a => a.name.toLowerCase() == appName.toLowerCase());
     return app;
 }
 
@@ -265,31 +286,40 @@ function getWorkspace(name: string): WorkspaceRuntime {
     return app;
 }
 
-function getOrCreateWorkspace(name: string, config: WorkspaceConfig): WorkspaceRuntime {
+function getOrCreateWorkspace(name: string): WorkspaceRuntime {
     let work= findWorkspace(name);
     if(!work) {
-        const work: WorkspaceRuntime = {
+        work = {
             name,
-            config,
+            config: null,
             apps: [],
-        }
-
-        for(const appConfig of config.apps) {
-            const app: AppRuntime = {
-                config: appConfig,
-                name: appConfig.name,
-                error: null,
-                message: null,
-                pid: null,
-                port: null,
-                status: AppStatus.None,
-            }
         }
 
         workspaces.set(name, work);
     }
 
     return work;
+}
+
+function getOrCreateApp(workspaceName: string, appName: string): AppRuntime {
+    const workspace = getOrCreateWorkspace(workspaceName);
+
+    let app = findApp(workspace, appName);
+    if(!app) {
+        app = {
+            name: appName,
+            status: AppStatus.None,
+            config: null,
+            error: null,
+            message: null,
+            pid: null,
+            port: null,
+        };
+
+        workspace.apps.push(app);
+    }
+
+    return app;
 }
 
 export function runApp(app: AppRuntime) {

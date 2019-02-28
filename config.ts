@@ -27,7 +27,12 @@ export async function loadConfig(): Promise<WorkspaceConfig> {
 
         logger.debug("Loading configuration from " + filePath);
         const config: WorkspaceConfig = await readJSONFile(filePath);
-        logger.debug("    workspace: " + config.name);
+
+        for(const app of config.apps) {
+            app.main = path.resolve(dir, app.main);
+            app.cwd = dir;
+        }
+
         return config;
     }
 }

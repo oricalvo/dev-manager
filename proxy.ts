@@ -34,10 +34,10 @@ export class BuildProxy {
         });
     }
 
-    async exitApp(name: string, error?: Error) {
-        logger.debug("exitApp", name, error);
+    async exit(name: string, error?: Error) {
+        logger.debug("exit", name, error);
 
-        const url = "/app/" + name + "/exit";
+        const url = "/" + this.config.name + "/app/" + name + "/exit";
 
         return await this.sendHttpRequest<void>("POST", url, {
             error: error && error.message,
@@ -45,20 +45,19 @@ export class BuildProxy {
 
     }
 
-    async pingApp(name: string, body: PingDTO) {
-        logger.debug("pingApp", name, body);
+    async ping(name: string, body: PingDTO) {
+        logger.debug("ping", name, body);
 
         const url = "/" + this.config.name + "/" + name + "/ping";
         return await this.sendHttpRequest<void>("POST", url, body);
 
     }
 
-    async kill(names: string[]) {
-        logger.debug("kill", names);
+    async kill(appName: string) {
+        logger.debug("kill", appName);
 
-        return await this.sendHttpRequest<void>("POST", "/app/kill", {
-            names,
-        });
+        const url = "/" + this.config.name + "/" + appName + "/kill";
+        return await this.sendHttpRequest<void>("POST", url, {});
     }
 
     async restart(names: string[]) {

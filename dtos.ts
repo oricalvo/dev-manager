@@ -6,6 +6,7 @@ export interface WorkspaceConfig {
 export interface AppConfig {
     name: string;
     main: string;
+    cwd: string;
 }
 
 export interface WorkspaceRuntime {
@@ -54,4 +55,8 @@ export interface AppDTO {
 export interface PingDTO {
     pid: number;
     port: number;
+}
+
+export interface ExitDTO {
+    error: string;
 }
