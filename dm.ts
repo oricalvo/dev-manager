@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 
-import {createConsoleLogger, createLogger, createWinstonLogger, LOGGER} from "./logger";
+import {createConsoleLogger, createLogger, LOGGER} from "./logger";
 import {registerService} from "oc-tools/serviceLocator";
 import {loadConfig} from "./config";
-import {spawn} from "oc-tools/process";
-import {buildProxy} from "./proxy";
-import {BuildAppStatus} from "./dtos";
+import {AppStatus} from "./dtos";
+import {BuildProxy} from "./proxy";
 
 const logger = createLogger();
 
@@ -19,7 +18,10 @@ async function main() {
             throw new Error("Missing command");
         }
 
-        if (cmd == "list") {
+        if (cmd == "start") {
+            await start();
+        }
+        else if (cmd == "list") {
             await list();
         }
         else {
@@ -31,15 +33,24 @@ async function main() {
     }
 }
 
+async function start() {
+    const config = await loadConfig();
+
+    const proxy = new BuildProxy(config);
+    await proxy.start(config);
+}
+
 async function list() {
     const config = await loadConfig();
 
-    const apps = await buildProxy.getApps(config.worksapce);
+    const proxy = new BuildProxy(config);
+    const apps = await proxy.getApps();
+
     logger.debug("Apps");
     logger.debug("----");
     for(const app of apps) {
         const name = app.name;
-        const status = BuildAppStatus[app.status].toString();
+        const status = AppStatus[app.status].toString();
         const message = app.message || "";
         const error = app.error || "";
         const pid = (app.pid || "").toString();

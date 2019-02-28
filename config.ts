@@ -1,6 +1,7 @@
 import * as path from "path";
 import {fileExists, readJSONFile} from "oc-tools/fs";
 import {createLogger} from "./logger";
+import {WorkspaceConfig} from "./dtos";
 
 const logger = createLogger();
 
@@ -8,7 +9,7 @@ export interface Config {
     worksapce: string;
 }
 
-export async function loadConfig(): Promise<Config> {
+export async function loadConfig(): Promise<WorkspaceConfig> {
     let dir = process.cwd();
 
     while(true) {
@@ -24,7 +25,9 @@ export async function loadConfig(): Promise<Config> {
             continue;
         }
 
-        const config: Config = await readJSONFile(filePath);
+        logger.debug("Loading configuration from " + filePath);
+        const config: WorkspaceConfig = await readJSONFile(filePath);
+        logger.debug("    workspace: " + config.name);
         return config;
     }
 }

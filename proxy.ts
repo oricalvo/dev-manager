@@ -1,27 +1,37 @@
 import {httpRequest} from "./http.helpers";
 import {createLogger} from "./logger";
-import {BuildApp} from "./dtos";
+import {AppRuntime, AppDTO, PingDTO, WorkspaceConfig} from "./dtos";
 
 const logger = createLogger("BuildProxy");
 
 export class BuildProxy {
     baseUrl: string = "http://localhost:7070/api";
 
-    constructor() {
+    constructor(public config: WorkspaceConfig) {
     }
 
-    async getApps(workspaceName: string): Promise<BuildApp[]> {
-        logger.debug("getApps", workspaceName);
+    async start(config: WorkspaceConfig) {
+        logger.debug("start", config);
 
-        return await this.sendHttpRequest<BuildApp[]>("GET", "/" + workspaceName + "/app");
+        const url = "/" + this.config.name + "/start";
+
+        return await this.sendHttpRequest<void>("POST", url, config);
     }
 
-    async initApp(app: BuildApp): Promise<void> {
-        logger.debug("initApp2", app);
+    async getApps(): Promise<AppDTO[]> {
+        logger.debug("getApps");
 
-        const url = "/app/" + app.name + "/init";
+        return await this.sendHttpRequest<AppDTO[]>("GET", "/" + this.config.name + "/app");
+    }
 
-        return await this.sendHttpRequest<void>("POST", url, app);
+    async initApp(appName: string, port?: number): Promise<void> {
+        logger.debug("initApp", appName, port);
+
+        const url = "/" + this.config.name + "/" + appName + "/init";
+
+        return await this.sendHttpRequest<void>("POST", url, {
+            port,
+        });
     }
 
     async exitApp(name: string, error?: Error) {
@@ -35,12 +45,11 @@ export class BuildProxy {
 
     }
 
-    async pingApp(name: string, app: BuildApp) {
-        logger.debug("pingApp", name, app);
+    async pingApp(name: string, body: PingDTO) {
+        logger.debug("pingApp", name, body);
 
-        const url = "/app/" + name + "/ping";
-
-        return await this.sendHttpRequest<void>("POST", url, app);
+        const url = "/" + this.config.name + "/" + name + "/ping";
+        return await this.sendHttpRequest<void>("POST", url, body);
 
     }
 
@@ -69,9 +78,9 @@ export class BuildProxy {
     }
 
     private async sendHttpRequest<T>(method: string, url: string, data?: any): Promise<T> {
+        logger.debug("sendHttpRequest", method, url, data);
+
         const res = await httpRequest<T>(method, this.baseUrl + url, data);
         return res;
     }
 }
-
-export const buildProxy = new BuildProxy();
