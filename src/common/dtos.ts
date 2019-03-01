@@ -1,6 +1,10 @@
+import {ChildProcess} from "child_process";
+
 export interface WorkspaceConfig {
     name: string;
+    build: string;
     apps: AppConfig[];
+    basePath: string;
 }
 
 export interface AppConfig {
@@ -19,15 +23,18 @@ export interface AppRuntime {
     name: string;
     config: AppConfig;
     status?: AppStatus;
-    pid?: number;
+    proc: ChildProcess;
     message?: string;
     error?: string;
     port?: number;
+    ping: Date;
+    color: (str: string) => string;
 }
 
 export enum AppStatus {
     None,
     Running,
+    Stopping,
     Stopped,
     Killed,
     Exited,
@@ -47,14 +54,13 @@ export interface AppDTO {
     name: string;
     status: AppStatus;
     pid: number;
-    message: string;
     error: string;
     port: number;
+    ping: string;
 }
 
 export interface PingDTO {
-    pid: number;
-    port: number;
+    cwd: string;
 }
 
 export interface ExitDTO {
@@ -64,11 +70,14 @@ export interface ExitDTO {
 
 export interface StartDTO {
     cwd: string;
+    names: string[];
 }
 
-export interface KillDTO {
+export interface StopDTO {
+    cwd: string;
     names: string[];
 }
 
 export interface ListDTO{
+    cwd: string;
 }

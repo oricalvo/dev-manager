@@ -1,6 +1,6 @@
 import * as path from "path";
-import {ExecutionContext} from "./executionContext";
-import {createLogger} from "./logger";
+import {ExecutionContext} from "../common/executionContext";
+import {createLogger} from "../common/logger";
 
 const logger = createLogger("express.helpers");
 

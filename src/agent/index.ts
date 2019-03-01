@@ -1,7 +1,7 @@
-import {createLogger} from "./logger";
-import {WorkspaceConfig} from "./dtos";
-import {BuildProxy} from "./proxy";
-import {loadConfigFrom} from "./config";
+import {createLogger} from "../common/logger";
+import {WorkspaceConfig} from "../common/dtos";
+import {BuildProxy} from "../common/proxy";
+import {loadConfigFrom} from "../common/config";
 
 const logger = createLogger("BuildAgent");
 
@@ -36,15 +36,15 @@ export class BuildAgent {
         }
     }
 
-    async exit(error?: Error) {
-        try {
-            const proxy = new BuildProxy(this.config);
-            await proxy.exit(this.name, error);
-        }
-        catch(err) {
-            logger.error(err);
-        }
-    }
+    // async exit(error?: Error) {
+    //     try {
+    //         const proxy = new BuildProxy(this.config);
+    //         await proxy.exit(this.name, error);
+    //     }
+    //     catch(err) {
+    //         logger.error(err);
+    //     }
+    // }
 
     async ping() {
         logger.debug("ping", this.name);
@@ -52,8 +52,7 @@ export class BuildAgent {
         try {
             const proxy = new BuildProxy(this.config);
             await proxy.ping(this.name, {
-                pid: process.pid,
-                port: this.port,
+                cwd: process.cwd(),
             });
         }
         catch(err) {

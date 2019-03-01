@@ -12,6 +12,7 @@
     "node_modules"
   ],
   "include": [
-    "*.ts"
+    "src/**/*.ts",
+    "build/**/*.ts"
   ]
 }

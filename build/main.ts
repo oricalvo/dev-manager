@@ -1,6 +1,6 @@
 import {registerService} from "oc-tools/serviceLocator";
-import {createLogger, createWinstonLogger, LOGGER} from "./logger";
-import {copyFile, copyGlob, deleteDirectory} from "oc-tools/fs";
+import {createLogger, createWinstonLogger, LOGGER} from "../src/common/logger";
+import {copyFile, copyGlob, deleteDirectory, ensureDirectory} from "oc-tools/fs";
 import {spawn} from "oc-tools/process";
 
 const logger = createLogger("main");
@@ -8,8 +8,8 @@ const logger = createLogger("main");
 registerService(LOGGER, createWinstonLogger("build.log", true, "build"));
 
 export async function dev() {
-    spawn("node", ["server.js"], {
-        cwd: "./dist"
+    spawn("node", ["main.js"], {
+        cwd: "./dist/src/server"
     });
 }
 
@@ -18,8 +18,12 @@ export async function pack() {
 
     await deleteDirectory("./package");
 
-    await copyGlob("./dist/*.js", "./package");
-    await copyGlob("./dist/*.d.ts", "./package");
+    await copyGlob("./dist/src/**/*.*", "./package");
+
+    await ensureDirectory("./package/bin");
+    await copyGlob("./dist/src/cli/*.js", "./package/bin");
+    await deleteDirectory("./package/cli");
+
     await copyFile("./package.json", "package/package.json");
 }
 

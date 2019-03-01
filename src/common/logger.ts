@@ -4,6 +4,7 @@ import {resolveService, ServiceToken, tryResolveService} from "oc-tools/serviceL
 import * as util from "util";
 import * as path from "path";
 import {ExecutionContext} from "./executionContext";
+import * as colors from "colors/safe";
 
 const { printf } = winston.format;
 
@@ -16,7 +17,14 @@ export interface LogMethod {
 }
 
 export function consoleLogMethod(level: string, message: string, meta: any) {
-    console.log(buildFormatMessage(level, meta.appName, meta.prefix, message));
+    const line = buildFormatMessage(level, meta.appName, meta.prefix, message);
+
+    if(level == "error") {
+        console.log(colors.red(line));
+    }
+    else {
+        console.log(line);
+    }
 }
 
 export interface Logger {

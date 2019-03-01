@@ -5,10 +5,6 @@ import {WorkspaceConfig} from "./dtos";
 
 const logger = createLogger();
 
-export interface Config {
-    worksapce: string;
-}
-
 export async function loadConfigFrom(dir: string): Promise<WorkspaceConfig> {
     while(true) {
         const filePath = path.resolve(dir, "dm.conf");
@@ -25,6 +21,7 @@ export async function loadConfigFrom(dir: string): Promise<WorkspaceConfig> {
 
         logger.debug("Loading configuration from " + filePath);
         const config: WorkspaceConfig = await readJSONFile(filePath);
+        config.basePath = dir;
 
         for(const app of config.apps) {
             app.main = path.resolve(dir, app.main);
