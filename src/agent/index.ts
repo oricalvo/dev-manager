@@ -53,6 +53,7 @@ export class BuildAgent {
             const proxy = new BuildProxy(this.config);
             await proxy.ping(this.name, {
                 cwd: process.cwd(),
+                pid: process.pid,
             });
         }
         catch(err) {

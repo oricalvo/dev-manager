@@ -29,6 +29,7 @@ export interface AppRuntime {
     port?: number;
     ping: Date;
     color: (str: string) => string;
+    pid: number;
 }
 
 export enum AppStatus {
@@ -61,6 +62,7 @@ export interface AppDTO {
 
 export interface PingDTO {
     cwd: string;
+    pid: number;
 }
 
 export interface ExitDTO {

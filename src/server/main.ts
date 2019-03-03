@@ -19,6 +19,7 @@ import {spawn} from "child_process";
 import {Mapper_App_AppDTO} from "./mappers";
 import {loadConfigFrom} from "../common/config";
 import * as colors from "colors";
+import {delay} from "../common/promise.helpers";
 
 const logger = createLogger();
 
@@ -132,6 +133,7 @@ async function restart(req) {
     const names = body.names || work.apps.map(a=>a.name);
 
     stopApps(work, names);
+    await delay(1000);
     startApps(work, names);
 }
 
@@ -154,6 +156,7 @@ async function ping(req) {
     const app = getOrCreateApp(work, appName);
     app.status = AppStatus.Running;
     app.error = null;
+    app.pid = body.pid;
     app.ping = new Date();
 }
 
@@ -418,6 +421,7 @@ function createAppRuntime(config: AppConfig) {
         error: null,
         message: null,
         proc: null,
+        pid: null,
         port: null,
         ping: null,
         color: pickColor(),
@@ -444,6 +448,7 @@ export function startApp(app: AppRuntime) {
         });
 
         app.proc = proc;
+        app.pid = proc.pid;
         app.status = AppStatus.Running;
 
         proc.on("close", function () {
@@ -456,6 +461,7 @@ export function startApp(app: AppRuntime) {
             if (app.proc) {
                 app.proc.unref();
                 app.proc = null;
+                app.pid = null;
             }
         });
 
@@ -463,6 +469,7 @@ export function startApp(app: AppRuntime) {
             app.error = err.message;
             app.status = AppStatus.Killed;
             app.proc = null;
+            app.pid = null;
         });
 
         // proc.stdout.on("data", function(data) {
