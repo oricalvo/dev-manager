@@ -9,6 +9,7 @@ import {DMError} from "../common/errors";
 import * as moment from "moment";
 import {spawn} from "child_process";
 import * as path from "path";
+import {delay} from "../common/promise.helpers";
 
 const logger = createLogger();
 
@@ -44,6 +45,9 @@ export async function main() {
     catch(err) {
         if(err instanceof DMError) {
             logger.error(err.message);
+        }
+        else if(err.code == "ECONNREFUSED") {
+            logger.error("DM server is not available");
         }
         else if(err.statusCode && err.statusMessage) {
             logger.error(err.statusCode + " " + err.statusMessage);
@@ -91,17 +95,17 @@ async function build() {
     }
 
     const [command, ...args] = config.build.split(" ");
-    const info = path.parse(command);
+    // const info = path.parse(command);
 
-    console.log("xxx", {
-        cwd: path.resolve(config.basePath, info.dir),
-        base: info.base,
-    });
+    // const exeName = info.base;
+    // const cwd = path.resolve(config.basePath, info.dir);
 
-    spawn(info.base, args, {
+    logger.debug(command, args);
+
+    spawn(command, args, {
         stdio: "inherit",
         shell: true,
-        cwd: path.resolve(config.basePath, info.dir),
+        cwd: config.basePath,
     });
 }
 
@@ -110,8 +114,12 @@ async function server(args: string[]) {
     if(cmd == "start" || !cmd) {
         await serverStart();
     }
+    else if(cmd == "restart" || !cmd) {
+        await serverRestart();
+    }
     else if(cmd == "ping" || !cmd) {
-        await BuildProxy.alive();
+        const res = await BuildProxy.alive();
+        logger.debug(res);
     }
     else if(cmd == "stop") {
         await serverStop();
@@ -132,21 +140,35 @@ async function serverStart() {
             logger.debug("Running DM server at: " + mainFilePath);
             const proc = spawn("node", [mainFilePath], {
                 detached: true,
+                stdio: "ignore",
             });
             logger.debug("DM PID is: " + proc.pid);
             proc.unref();
 
             return;
-            // console.log(__dirname);
-            // throw new DMError("DM server is not running");
         }
 
         throw err;
     }
 }
 
+async function serverRestart() {
+    await serverStop();
+    await delay(1000);
+    await serverStart();
+}
+
 async function serverStop() {
-    await BuildProxy.shutdown();
+    try {
+        await BuildProxy.shutdown();
+    }
+    catch(err) {
+        if(err.code == "ECONNREFUSED") {
+            return;
+        }
+
+        throw err;
+    }
 }
 
 async function list() {

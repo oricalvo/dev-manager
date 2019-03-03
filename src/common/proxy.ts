@@ -97,7 +97,7 @@ export class BuildProxy {
     }
 
     static async alive() {
-        await sendHttpRequest<void>("GET", "/alive");
+        return await sendHttpRequest<void>("GET", "/alive", undefined, true);
     }
 
     static async shutdown() {
@@ -105,9 +105,9 @@ export class BuildProxy {
     }
 }
 
-async function sendHttpRequest<T>(method: string, url: string, data?: any): Promise<T> {
-    logger.debug("sendHttpRequest", method, url, data);
+async function sendHttpRequest<T>(method: string, url: string, data?: any, dontParseBody?: boolean): Promise<T> {
+    logger.debug("sendHttpRequest", method, url, data, dontParseBody);
 
-    const res = await httpRequest<T>(method, BASE_URL + url, data);
+    const res = await httpRequest<T>(method, BASE_URL + url, data, undefined, dontParseBody);
     return res;
 }

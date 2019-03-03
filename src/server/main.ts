@@ -57,10 +57,13 @@ export function main() {
 }
 
 function alive(req) {
+    return "ALIVE";
 }
 
 function shutdown(app) {
-    app.close();
+    setTimeout(function() {
+        process.exit(0);
+    }, 1000);
 }
 
 async function start(req): Promise<AppDTO[]> {
@@ -436,6 +439,8 @@ export function startApp(app: AppRuntime) {
     try {
         const proc = spawn("node", [app.config.main], {
             cwd: process.cwd(),
+            detached: true,
+            stdio: "ignore",
         });
 
         app.proc = proc;
@@ -460,15 +465,15 @@ export function startApp(app: AppRuntime) {
             app.proc = null;
         });
 
-        proc.stdout.on("data", function(data) {
-            const messages = data.toString().split("\n");
-            for(let message of messages) {
-                message = message.trim();
-                if(message) {
-                    console.log(app.color(app.name + "> " + message));
-                }
-            }
-        });
+        // proc.stdout.on("data", function(data) {
+        //     const messages = data.toString().split("\n");
+        //     for(let message of messages) {
+        //         message = message.trim();
+        //         if(message) {
+        //             console.log(app.color(app.name + "> " + message));
+        //         }
+        //     }
+        // });
     }
     catch(err) {
         app.error = err.message;
