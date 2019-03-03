@@ -1,19 +1,21 @@
 #!/usr/bin/env node
 
-import {createLogger} from "../common/logger";
+import {createConsoleLogger, createLogger, LOGGER} from "../common/logger";
 import {AppDTO, AppStatus} from "../common/dtos";
 import {BuildProxy} from "../common/proxy";
-import {stopApps, restartApps, startApps} from "../common/common";
+import {restartApps, startApps, stopApps} from "../common/common";
 import {loadConfigFrom} from "../common/config";
 import {DMError} from "../common/errors";
-import * as moment from "moment";
 import {spawn} from "child_process";
 import * as path from "path";
 import {delay} from "../common/promise.helpers";
+import {registerService} from "oc-tools/serviceLocator";
 
 const logger = createLogger();
 
 export async function main() {
+    registerService(LOGGER, createConsoleLogger("dm"));
+
     try {
         const [cmd, ...args] = process.argv.slice(2);
         if(!cmd) {
