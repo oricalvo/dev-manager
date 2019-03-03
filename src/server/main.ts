@@ -32,6 +32,8 @@ export function main() {
     app.use(bodyParser.json());
     app.use(bodyParser.text());
 
+    app.get("/api/alive", promisifyExpressApi(alive));
+    app.post("/api/shutdown", promisifyExpressApi(() => shutdown(app)));
     app.post("/api/start", promisifyExpressApi(start));
     app.post("/api/restart", promisifyExpressApi(restart));
     app.post("/api/stop", promisifyExpressApi(stop));
@@ -52,6 +54,13 @@ export function main() {
     app.listen(7070, function () {
         logger.debug("Server is running on port 7070");
     });
+}
+
+function alive(req) {
+}
+
+function shutdown(app) {
+    app.close();
 }
 
 async function start(req): Promise<AppDTO[]> {

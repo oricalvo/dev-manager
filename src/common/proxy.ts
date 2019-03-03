@@ -4,8 +4,9 @@ import {AppRuntime, AppDTO, PingDTO, WorkspaceConfig, StartDTO, StopDTO, ListDTO
 
 const logger = createLogger("BuildProxy");
 
+const BASE_URL = "http://localhost:7070/api";
+
 export class BuildProxy {
-    baseUrl: string = "http://localhost:7070/api";
 
     constructor(public config: WorkspaceConfig) {
     }
@@ -20,7 +21,7 @@ export class BuildProxy {
             names,
         };
 
-        return await this.sendHttpRequest<void>("POST", url, body);
+        return await sendHttpRequest<void>("POST", url, body);
     }
 
     async list(workspaceName: string): Promise<AppDTO[]> {
@@ -30,7 +31,7 @@ export class BuildProxy {
             cwd: process.cwd(),
         }
 
-        return await this.sendHttpRequest<AppDTO[]>("GET", "/list", body);
+        return await sendHttpRequest<AppDTO[]>("GET", "/list", body);
     }
 
     async initApp(appName: string, port?: number): Promise<void> {
@@ -38,7 +39,7 @@ export class BuildProxy {
 
         const url = "/" + this.config.name + "/" + appName + "/init";
 
-        return await this.sendHttpRequest<void>("POST", url, {
+        return await sendHttpRequest<void>("POST", url, {
             port,
         });
     }
@@ -52,14 +53,14 @@ export class BuildProxy {
             error: error && error.message,
         }
 
-        return await this.sendHttpRequest<void>("POST", url, body);
+        return await sendHttpRequest<void>("POST", url, body);
     }
 
     async ping(name: string, body: PingDTO) {
         logger.debug("ping", name, body);
 
         const url = "/" + this.config.name + "/" + name + "/ping";
-        return await this.sendHttpRequest<void>("POST", url, body);
+        return await sendHttpRequest<void>("POST", url, body);
 
     }
 
@@ -71,7 +72,7 @@ export class BuildProxy {
             cwd: process.cwd(),
             names,
         }
-        return await this.sendHttpRequest<void>("POST", url, body);
+        return await sendHttpRequest<void>("POST", url, body);
     }
 
     async restart(names: string[]) {
@@ -84,21 +85,29 @@ export class BuildProxy {
             names,
         };
 
-        return await this.sendHttpRequest<void>("POST", url, body);
+        return await sendHttpRequest<void>("POST", url, body);
     }
 
     async debug(name: string) {
         logger.debug("debug", name);
 
-        return await this.sendHttpRequest<void>("POST", "/app/debug", {
+        return await sendHttpRequest<void>("POST", "/app/debug", {
             name,
         });
     }
 
-    private async sendHttpRequest<T>(method: string, url: string, data?: any): Promise<T> {
-        logger.debug("sendHttpRequest", method, url, data);
-
-        const res = await httpRequest<T>(method, this.baseUrl + url, data);
-        return res;
+    static async alive() {
+        await sendHttpRequest<void>("GET", "/alive");
     }
+
+    static async shutdown() {
+        await sendHttpRequest<void>("POST", "/shutdown");
+    }
+}
+
+async function sendHttpRequest<T>(method: string, url: string, data?: any): Promise<T> {
+    logger.debug("sendHttpRequest", method, url, data);
+
+    const res = await httpRequest<T>(method, BASE_URL + url, data);
+    return res;
 }

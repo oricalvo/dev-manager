@@ -34,6 +34,9 @@ export async function main() {
         else if (cmd == "build") {
             await build();
         }
+        else if (cmd == "server") {
+            await server(args);
+        }
         else {
             throw new Error("Unexpected command " + cmd);
         }
@@ -100,6 +103,50 @@ async function build() {
         shell: true,
         cwd: path.resolve(config.basePath, info.dir),
     });
+}
+
+async function server(args: string[]) {
+    const cmd = args[0];
+    if(cmd == "start" || !cmd) {
+        await serverStart();
+    }
+    else if(cmd == "ping" || !cmd) {
+        await BuildProxy.alive();
+    }
+    else if(cmd == "stop") {
+        await serverStop();
+    }
+    else {
+        throw new DMError("Unknown command: " + cmd);
+    }
+}
+
+async function serverStart() {
+    try {
+        await BuildProxy.alive();
+        throw new DMError("DM server is already running");
+    }
+    catch(err) {
+        if(err.code == "ECONNREFUSED") {
+            const mainFilePath = path.resolve(__dirname, "../server/main.js");
+            logger.debug("Running DM server at: " + mainFilePath);
+            const proc = spawn("node", [mainFilePath], {
+                detached: true,
+            });
+            logger.debug("DM PID is: " + proc.pid);
+            proc.unref();
+
+            return;
+            // console.log(__dirname);
+            // throw new DMError("DM server is not running");
+        }
+
+        throw err;
+    }
+}
+
+async function serverStop() {
+    await BuildProxy.shutdown();
 }
 
 async function list() {
