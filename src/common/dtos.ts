@@ -2,15 +2,22 @@ import {ChildProcess} from "child_process";
 
 export interface WorkspaceConfig {
     name: string;
-    build: string;
+    build: BuildConfig;
     apps: AppConfig[];
     basePath: string;
+}
+
+export interface BuildConfig {
+    command: string;
+    args: string[];
+    cwd: string;
 }
 
 export interface AppConfig {
     name: string;
     main: string;
     cwd: string;
+    args: string[];
 }
 
 export interface WorkspaceRuntime {
@@ -30,6 +37,7 @@ export interface AppRuntime {
     ping: Date;
     color: (str: string) => string;
     pid: number;
+    workspace: WorkspaceRuntime;
 }
 
 export enum AppStatus {

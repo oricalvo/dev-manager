@@ -8,7 +8,7 @@ import {loadConfigFrom} from "../common/config";
 import {DMError} from "../common/errors";
 import {spawn} from "child_process";
 import * as path from "path";
-import {delay} from "../common/promise.helpers";
+import {delay, waitForEvent} from "../common/promise.helpers";
 import {registerService} from "oc-tools/serviceLocator";
 
 const logger = createLogger();
@@ -92,23 +92,28 @@ async function stop(args) {
 
 async function build() {
     const config = await loadConfigFrom(process.cwd());
-    if(!config.build) {
-        throw new Error("build command is missing");
+    const {build} = config;
+    if(!build) {
+        throw new Error("build configuration is missing");
     }
 
-    const [command, ...args] = config.build.split(" ");
+    // const [command, ...args] = config.build.split(" ");
     // const info = path.parse(command);
 
     // const exeName = info.base;
     // const cwd = path.resolve(config.basePath, info.dir);
 
-    logger.debug(command, args);
+    // logger.debug(command, args);
 
-    spawn(command, args, {
+    logger.debug("Running build command:", build.command, "at", path.resolve(config.basePath, build.cwd));
+
+    const proc = spawn(build.command, build.args, {
         stdio: "inherit",
         shell: true,
-        cwd: config.basePath,
+        cwd: path.resolve(config.basePath, build.cwd),
     });
+
+    await waitForEvent(proc, "close", true);
 }
 
 async function server(args: string[]) {

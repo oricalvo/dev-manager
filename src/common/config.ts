@@ -24,8 +24,11 @@ export async function loadConfigFrom(dir: string): Promise<WorkspaceConfig> {
         config.basePath = dir;
 
         for(const app of config.apps) {
-            app.main = path.resolve(dir, app.main);
-            app.cwd = dir;
+            if (!app.cwd) {
+                app.cwd = config.basePath;
+            }
+
+            app.args = app.args || [];
         }
 
         return config;

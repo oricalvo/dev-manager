@@ -20,6 +20,8 @@ import {Mapper_App_AppDTO} from "./mappers";
 import {loadConfigFrom} from "../common/config";
 import * as colors from "colors";
 import {delay} from "../common/promise.helpers";
+import {weekdays} from "moment";
+import * as path from "path";
 
 const logger = createLogger();
 
@@ -376,7 +378,7 @@ async function loadWorkspace(cwd: string): Promise<WorkspaceRuntime> {
         }
 
         for(const appConfig of config.apps) {
-            const app = createAppRuntime(appConfig);
+            const app = createAppRuntime(work, appConfig);
             work.apps.push(app);
         }
 
@@ -405,7 +407,7 @@ function getOrCreateApp(workspace: WorkspaceRuntime, appName: string): AppRuntim
     let app = findApp(workspace, appName);
     if(!app) {
         const appConfig = getAppConfig(workspace.config, appName);
-        app = createAppRuntime(appConfig);
+        app = createAppRuntime(workspace, appConfig);
 
         workspace.apps.push(app);
     }
@@ -413,7 +415,7 @@ function getOrCreateApp(workspace: WorkspaceRuntime, appName: string): AppRuntim
     return app;
 }
 
-function createAppRuntime(config: AppConfig) {
+function createAppRuntime(workspace: WorkspaceRuntime, config: AppConfig) {
     const app: AppRuntime = {
         name: config.name,
         status: AppStatus.None,
@@ -425,6 +427,7 @@ function createAppRuntime(config: AppConfig) {
         port: null,
         ping: null,
         color: pickColor(),
+        workspace: workspace,
     };
 
     return app;
@@ -441,11 +444,15 @@ export function startApp(app: AppRuntime) {
     }
 
     try {
-        const proc = spawn("node", [app.config.main], {
-            cwd: process.cwd(),
-            detached: true,
-            stdio: "ignore",
-        });
+        const cwd = (app.config.cwd && path.resolve(app.workspace.config.basePath, app.config.cwd)) || process.cwd();
+
+        console.log("xxx", cwd);
+
+        const proc = spawn("node", [app.config.main, ...app.config.args], {
+                cwd,
+                detached: true,
+                stdio: "ignore",
+            });
 
         app.proc = proc;
         app.pid = proc.pid;
