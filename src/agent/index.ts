@@ -8,6 +8,7 @@ const logger = createLogger("BuildAgent");
 export class BuildAgent {
     port: number;
     config: WorkspaceConfig;
+    timeoutId;
 
     constructor(public name: string) {
     }
@@ -22,7 +23,7 @@ export class BuildAgent {
             await this.ping();
 
             const schedule = () => {
-                setTimeout(async ()=> {
+                this.timeoutId = setTimeout(async ()=> {
                     await this.ping();
 
                     schedule();
@@ -36,15 +37,10 @@ export class BuildAgent {
         }
     }
 
-    // async exit(error?: Error) {
-    //     try {
-    //         const proxy = new BuildProxy(this.config);
-    //         await proxy.exit(this.name, error);
-    //     }
-    //     catch(err) {
-    //         logger.error(err);
-    //     }
-    // }
+    dispose() {
+        clearTimeout(this.timeoutId);
+        this.timeoutId = 0;
+    }
 
     async ping() {
         logger.debug("ping", this.name);
