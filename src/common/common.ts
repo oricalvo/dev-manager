@@ -41,10 +41,10 @@ export function getAppWorkingDirectory(worksapce: WorkspaceConfig, app: AppConfi
     return res;
 }
 
-export function getAppConfig(config: WorkspaceConfig, name: string): AppConfig {
-    const app = config.apps.find(a => a.name == name);
+export function getAppConfig(workspace: WorkspaceConfig, appName: string): AppConfig {
+    const app = workspace.apps.find(a => a.name.toLowerCase() == appName.toLowerCase());
     if(!app) {
-        throw new Error("App with name " + name + " was not found");
+        throw new Error("App config with name " + appName + " was not found");
     }
 
     return app;
