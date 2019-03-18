@@ -3,7 +3,7 @@
 import {createConsoleLogger, createLogger, LOGGER} from "../common/logger";
 import {AppDTO, AppStatus} from "../common/dtos";
 import {BuildProxy} from "../common/proxy";
-import {restartApps, startApps, stopApps} from "../common/common";
+import {restartApps, runApps, startApps, stopApps} from "../common/common";
 import {loadConfigFrom} from "../common/config";
 import {DMError} from "../common/errors";
 import {spawn} from "child_process";
@@ -24,6 +24,9 @@ export async function main() {
 
         if (cmd == "start") {
             await start(args);
+        }
+        else if (cmd == "run") {
+            await run(args);
         }
         else if (cmd == "restart") {
             await restart(args);
@@ -70,6 +73,18 @@ async function start(args) {
     await list();
 }
 
+async function run(args) {
+    //
+    //  Run requested app inside current shell (not through dm server)
+    //
+    const appName = args[0];
+
+    const config = await loadConfigFrom(process.cwd());
+    const names = appName ? [appName] : undefined;
+
+    await runApps(config, names);
+}
+
 async function restart(args) {
     const appName = args[0];
 
@@ -96,14 +111,6 @@ async function build() {
     if(!build) {
         throw new Error("build configuration is missing");
     }
-
-    // const [command, ...args] = config.build.split(" ");
-    // const info = path.parse(command);
-
-    // const exeName = info.base;
-    // const cwd = path.resolve(config.basePath, info.dir);
-
-    // logger.debug(command, args);
 
     logger.debug("Running build command:", build.command, "at", path.resolve(config.basePath, build.cwd));
 

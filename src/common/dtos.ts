@@ -43,7 +43,6 @@ export interface AppRuntime {
 export enum AppStatus {
     None,
     Running,
-    Stopping,
     Stopped,
     Killed,
     Exited,

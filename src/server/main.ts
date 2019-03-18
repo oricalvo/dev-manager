@@ -20,8 +20,8 @@ import {Mapper_App_AppDTO} from "./mappers";
 import {loadConfigFrom} from "../common/config";
 import * as colors from "colors";
 import {delay} from "../common/promise.helpers";
-import {weekdays} from "moment";
 import * as path from "path";
+import {getAppWorkingDirectory} from "../common/common";
 
 const logger = createLogger();
 
@@ -210,106 +210,14 @@ function stopApps(work: WorkspaceRuntime, names: string[]) {
 async function stopApp(app: AppRuntime) {
     logger.debug("stopApp", app.name);
 
-    if (app.proc) {
-        logger.debug("process.kill", app.proc.pid);
+    if (app.pid) {
+        logger.debug("process.kill", app.pid);
 
-        app.status = AppStatus.Stopping;
+        process.kill(app.pid);
 
-        process.kill(app.proc.pid);
-
-        // app.proc.unref();
-        // app.proc = null;
-        //
-        // app.status = AppStatus.Stopped;
-        // app.error = null;
-        // app.message = null;
+        app.status = AppStatus.Stopped;
     }
 }
-
-// async function restartApps(req) {
-//     logger.debug("restartApps", req.body);
-//
-//     const body: KillApps = req.body;
-//     const names = body.names || apps.keys();
-//
-//     for(const name of names) {
-//         killApp(name, "Killed by user");
-//     }
-//
-//     for(const name of names) {
-//         runApp(name, "Restart by user");
-//     }
-// }
-
-// async function debugApp(req) {
-//     logger.debug("debugApp", req.body);
-//
-//     const body: DebugApp = req.body;
-//     if(!body.name) {
-//         throw new Error("Invalid request. body.name is missing");
-//     }
-//
-//     const app = getApp(body.name);
-//
-//     process["_debugProcess"](app.pid);
-//
-//     await delay(500);
-//
-//     logger.debug("Now you should open Chrome and navigate to chrome://inspect");
-// }
-
-// export function killAllApps(status: string) {
-//     for(const [name, app] of apps) {
-//         if(app.pid) {
-//             killApp(name, status);
-//         }
-//     }
-// }
-
-// export function restartAll(message: string) {
-//     for(const [name, app] of apps) {
-//         if(app.status == AppStatus.Stopped) {
-//             continue;
-//         }
-//
-//         killApp(name, message);
-//     }
-//
-//     for(const [name, app] of apps) {
-//         if(app.status == AppStatus.Stopped) {
-//             continue;
-//         }
-//
-//         runApp(name, message);
-//     }
-// }
-
-// function killApp(name: string, status: string) {
-//     logger.debug("killApp", name);
-//
-//     try {
-//         const app = findApp(name);
-//         if (app && app.pid) {
-//             process.kill(app.pid);
-//
-//             app.status = AppStatus.Killed;
-//             app.pid = null;
-//             app.message = status;
-//         }
-//     }
-//     catch(err) {
-//         logger.error("Failed to kill app " + name);
-//     }
-// }
-
-// function findApp(work: WorkspaceRuntime, name: string) {
-//     const app = work.apps.find(app => app.name.toLowerCase() == name.toLowerCase());
-//     if(!app) {
-//         return null;
-//     }
-//
-//     return app;
-// }
 
 function findWorkspace(name: string): WorkspaceRuntime {
     const app = workspaces.get(name.toLowerCase());
@@ -444,7 +352,7 @@ export function startApp(app: AppRuntime) {
     }
 
     try {
-        const cwd = (app.config.cwd && path.resolve(app.workspace.config.basePath, app.config.cwd)) || process.cwd();
+        const cwd = getAppWorkingDirectory(app.workspace.config, app.config);
 
         console.log("xxx", cwd);
 
@@ -459,9 +367,7 @@ export function startApp(app: AppRuntime) {
         app.status = AppStatus.Running;
 
         proc.on("close", function () {
-            if (app.status == AppStatus.Stopping) {
-                app.status = AppStatus.Stopped;
-            } else {
+            if (app.status != AppStatus.Stopped) {
                 app.status = AppStatus.Killed;
             }
 
@@ -478,16 +384,6 @@ export function startApp(app: AppRuntime) {
             app.proc = null;
             app.pid = null;
         });
-
-        // proc.stdout.on("data", function(data) {
-        //     const messages = data.toString().split("\n");
-        //     for(let message of messages) {
-        //         message = message.trim();
-        //         if(message) {
-        //             console.log(app.color(app.name + "> " + message));
-        //         }
-        //     }
-        // });
     }
     catch(err) {
         app.error = err.message;
