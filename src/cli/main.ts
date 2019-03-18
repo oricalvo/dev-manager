@@ -168,7 +168,7 @@ function resolveVars(str: string, vars: object) {
     let res = str;
 
     for(const key in vars) {
-        res = replaceAll(res, `${key.toUpperCase()}`, vars[key]);
+        res = replaceAll(res, "${" + key.toUpperCase() + "}", vars[key]);
     }
 
     if(res.indexOf("${") != -1) {
