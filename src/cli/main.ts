@@ -173,7 +173,7 @@ async function log(args: string[]) {
     }
 
     const proxy = new BuildProxy(config);
-    const app: AppDTO = await proxy.app(config.name);
+    const app: AppDTO = await proxy.app(appName);
 
     const logFilePath = replaceAll(app.config.log, "${PID}", app.pid);
     if(!await fileExists(logFilePath)) {
