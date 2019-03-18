@@ -164,6 +164,23 @@ async function version(args: string[]) {
     logger.debug("dm version " + json.version);
 }
 
+function resolveVars(str: string, vars: object) {
+    let res = str;
+
+    for(const key in vars) {
+        res = replaceAll(res, `${key.toUpperCase()}`, vars[key]);
+    }
+
+    if(res.indexOf("${") != -1) {
+        //
+        //
+        //
+        throw new Error("Failed to resolve all vars inside string " + str + " --> " + res);
+    }
+
+    return res;
+}
+
 async function log(args: string[]) {
     const config = await loadConfigFrom(process.cwd());
 
@@ -174,9 +191,15 @@ async function log(args: string[]) {
 
     const proxy = new BuildProxy(config);
     const app: AppDTO = await proxy.app(appName);
+    if(!app.config.log) {
+        throw new Error("No log path is defined for app " + appName);
+    }
 
-    const logFilePath = replaceAll(app.config.log, "${PID}", app.pid);
-    if(!await fileExists(logFilePath)) {
+    const logFilePath = resolveVars(app.config.log, {
+        pid: app.pid,
+    });
+
+    if (!await fileExists(logFilePath)) {
         logger.warn("Application log file was not found at: " + logFilePath);
         return;
     }
