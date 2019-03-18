@@ -12,7 +12,7 @@
     "colors": "^1.3.3",
     "express": "^4.16.4",
     "moment": "^2.24.0",
-    "oc-tools": "^1.0.48",
+    "oc-tools": "^1.0.49",
     "typescript": "^3.3.3333"
   },
   "scripts": {

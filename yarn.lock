@@ -1421,10 +1421,10 @@ object.pick@^1.3.0:
   dependencies:
     isobject "^3.0.1"
 
-oc-tools@^1.0.48:
-  version "1.0.48"
-  resolved "https://registry.yarnpkg.com/oc-tools/-/oc-tools-1.0.48.tgz#328c2afb53b081c019c4da262438f8374d42cb6c"
-  integrity sha512-i3QRwmJAz6ExV97K74AclA0lwhS7s/wInwQdeBRf22rbG5TVuZ2jPa+Hu+Oc6sCBx5h6vRNyn06TL2k36igCjQ==
+oc-tools@^1.0.49:
+  version "1.0.49"
+  resolved "https://registry.yarnpkg.com/oc-tools/-/oc-tools-1.0.49.tgz#3958a463e0ec5d7b8dd322e0e229ec8f30034e28"
+  integrity sha512-BCfxOeX/OOMH9G3yd32XTeh5k3NfRXGBAUUmyZkhOfOHNhXGmfYgEgiXXpTXuZ9/4jPk6nmGnzciEK6hUjGnKw==
   dependencies:
     chokidar "^2.0.4"
     colors "^1.3.2"

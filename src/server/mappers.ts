@@ -4,7 +4,7 @@ import {createLogger} from "../common/logger";
 
 const logger = createLogger("mappers");
 
-export function Mapper_App_AppDTO(app: AppRuntime): AppDTO {
+export function Mapper_AppRuntime_AppDTO(app: AppRuntime): AppDTO {
     return {
         name: app.name,
         status: app.status,

@@ -6,7 +6,7 @@ import {
     AppConfig,
     AppDTO,
     AppRuntime,
-    AppStatus,
+    AppStatus, GetAppDTO,
     ListDTO,
     PingDTO,
     StartDTO,
@@ -15,12 +15,13 @@ import {
 } from "../common/dtos";
 import {registerService} from "oc-tools/serviceLocator";
 import {spawn} from "child_process";
-import {Mapper_App_AppDTO} from "./mappers";
+import {Mapper_AppRuntime_AppDTO} from "./mappers";
 import {loadConfigFrom} from "../common/config";
 import * as colors from "colors";
 import {delay} from "../common/promise.helpers";
 import {getAppConfig, getAppWorkingDirectory} from "../common/common";
 import * as http from "http";
+import {parseQueryParams} from "oc-tools/http";
 
 const logger = createLogger();
 
@@ -80,7 +81,7 @@ async function start(req): Promise<AppDTO[]> {
 
     startApps(work, names);
 
-    return work.apps.map(Mapper_App_AppDTO);
+    return work.apps.map(Mapper_AppRuntime_AppDTO);
 }
 
 function startApps(work: WorkspaceRuntime, names: string[]) {
@@ -95,11 +96,14 @@ function startApps(work: WorkspaceRuntime, names: string[]) {
 async function list(req): Promise<AppDTO[]> {
     logger.debug("list", req.body);
 
-    const body: ListDTO = req.body;
+    const body = parseQueryParams<ListDTO>(req.query);
+    if(!body.cwd) {
+        throw new Error("Missing cwd parameter");
+    }
 
     const work = await loadWorkspace(body.cwd);
 
-    return work.apps.map(Mapper_App_AppDTO);
+    return work.apps.map(Mapper_AppRuntime_AppDTO);
 }
 
 async function getApp(req): Promise<AppDTO> {
@@ -110,7 +114,15 @@ async function getApp(req): Promise<AppDTO> {
         throw new Error("Missing name parameter");
     }
 
-    return null;
+    const body = parseQueryParams<GetAppDTO>(req.query);
+    if(!body.cwd) {
+        throw new Error("Missing cwd parameter");
+    }
+
+    const work = await loadWorkspace(body.cwd);
+    const app = findAppByName(work, name);
+
+    return Mapper_AppRuntime_AppDTO(app);
 }
 
 async function restart(req) {
