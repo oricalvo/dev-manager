@@ -10,6 +10,7 @@ import {spawn} from "child_process";
 import * as path from "path";
 import {delay, waitForEvent} from "../common/promise.helpers";
 import {registerService} from "oc-tools/serviceLocator";
+import {readJSONFile} from "oc-tools/fs";
 
 const logger = createLogger();
 
@@ -42,6 +43,9 @@ export async function main() {
         }
         else if (cmd == "server") {
             await server(args);
+        }
+        else if (cmd == "version") {
+            await version(args);
         }
         else {
             throw new Error("Unexpected command " + cmd);
@@ -141,6 +145,12 @@ async function server(args: string[]) {
     else {
         throw new DMError("Unknown command: " + cmd);
     }
+}
+
+async function version(args: string[]) {
+    const packageJsonFilePath = path.resolve(__dirname, "./package.json");
+    const json = await readJSONFile(packageJsonFilePath);
+    logger.debug("dm version " + json.version);
 }
 
 async function serverStart() {

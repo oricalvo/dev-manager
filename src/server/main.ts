@@ -354,8 +354,6 @@ export function startApp(app: AppRuntime) {
     try {
         const cwd = getAppWorkingDirectory(app.workspace.config, app.config);
 
-        console.log("xxx", cwd);
-
         const proc = spawn("node", [app.config.main, ...app.config.args], {
                 cwd,
                 detached: true,
