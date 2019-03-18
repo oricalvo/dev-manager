@@ -100,3 +100,7 @@ export interface StopDTO {
 export interface ListDTO{
     cwd: string;
 }
+
+export interface GetAppDTO{
+    cwd: string;
+}

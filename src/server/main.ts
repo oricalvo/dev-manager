@@ -20,6 +20,7 @@ import {loadConfigFrom} from "../common/config";
 import * as colors from "colors";
 import {delay} from "../common/promise.helpers";
 import {getAppConfig, getAppWorkingDirectory} from "../common/common";
+import * as http from "http";
 
 const logger = createLogger();
 
@@ -28,22 +29,35 @@ const workspaces = new Map<string, WorkspaceRuntime>();
 export function main() {
     registerService(LOGGER, createWinstonLogger("dm.log", true, "dm"));
 
-    const app = express();
+    try {
+        const app = express();
+        const server = http.createServer(app);
 
-    app.use(bodyParser.json());
-    app.use(bodyParser.text());
+        app.use(bodyParser.json());
+        app.use(bodyParser.text());
 
-    app.get("/api/alive", promisifyExpressApi(alive));
-    app.post("/api/shutdown", promisifyExpressApi(() => shutdown(app)));
-    app.post("/api/start", promisifyExpressApi(start));
-    app.post("/api/restart", promisifyExpressApi(restart));
-    app.post("/api/stop", promisifyExpressApi(stop));
-    app.get("/api/list", promisifyExpressApi(list));
-    app.post("/api/:workspace/:app/ping", promisifyExpressApi(ping));
+        app.get("/api/alive", promisifyExpressApi(alive));
+        app.post("/api/shutdown", promisifyExpressApi(() => shutdown(app)));
+        app.post("/api/start", promisifyExpressApi(start));
+        app.post("/api/restart", promisifyExpressApi(restart));
+        app.post("/api/stop", promisifyExpressApi(stop));
+        app.get("/api/list", promisifyExpressApi(list));
+        app.get("/api/app/:name", promisifyExpressApi(getApp));
+        app.post("/api/:workspace/:app/ping", promisifyExpressApi(ping));
 
-    app.listen(7070, function () {
-        logger.debug("Server is running on port 7070");
-    });
+        server.on("error", function(err) {
+            logger.error(err);
+            logger.error("Server encountered error. Exiting ...");
+            process.exit(1);
+        });
+
+        server.listen(7070, function () {
+            logger.debug("Server is running on port 7070");
+        });
+    }
+    catch(err) {
+        logger.error(err);
+    }
 }
 
 function alive(req) {
@@ -86,6 +100,17 @@ async function list(req): Promise<AppDTO[]> {
     const work = await loadWorkspace(body.cwd);
 
     return work.apps.map(Mapper_App_AppDTO);
+}
+
+async function getApp(req): Promise<AppDTO> {
+    logger.debug("getApp", req.body);
+
+    const {name} = req.params;
+    if(!name) {
+        throw new Error("Missing name parameter");
+    }
+
+    return null;
 }
 
 async function restart(req) {
@@ -166,13 +191,13 @@ function findWorkspace(name: string): WorkspaceRuntime {
     return app;
 }
 
-function findApp(workspace: WorkspaceRuntime, appName: string): AppRuntime {
+function findAppByName(workspace: WorkspaceRuntime, appName: string): AppRuntime {
     const app = workspace.apps.find(a => a.name.toLowerCase() == appName.toLowerCase());
     return app;
 }
 
-function getApp(work: WorkspaceRuntime, name: string) {
-    const app = findApp(work, name);
+function getAppByName(work: WorkspaceRuntime, name: string): AppRuntime {
+    const app = findAppByName(work, name);
     if(!app) {
         throw new Error("App with name " + name + " was not found");
     }
@@ -226,7 +251,7 @@ async function loadWorkspace(cwd: string): Promise<WorkspaceRuntime> {
 }
 
 function getOrCreateApp(workspace: WorkspaceRuntime, appName: string): AppRuntime {
-    let app = findApp(workspace, appName);
+    let app = findAppByName(workspace, appName);
     if(!app) {
         const appConfig = getAppConfig(workspace.config, appName);
         app = createAppRuntime(workspace, appConfig);
@@ -305,3 +330,4 @@ export function startApp(app: AppRuntime) {
 }
 
 main();
+
