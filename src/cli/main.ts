@@ -10,7 +10,7 @@ import {spawn} from "child_process";
 import * as path from "path";
 import {delay, waitForEvent} from "../common/promise.helpers";
 import {registerService} from "oc-tools/serviceLocator";
-import {readJSONFile} from "oc-tools/fs";
+import {fileExists, readJSONFile} from "oc-tools/fs";
 
 const logger = createLogger();
 
@@ -148,7 +148,15 @@ async function server(args: string[]) {
 }
 
 async function version(args: string[]) {
-    const packageJsonFilePath = path.resolve(__dirname, "./package.json");
+    let packageJsonFilePath = path.resolve(__dirname, "../package.json");
+    if(!await fileExists(packageJsonFilePath)) {
+        packageJsonFilePath = path.resolve(__dirname, "./package.json");
+    }
+
+    if(!await fileExists(packageJsonFilePath)) {
+        throw new Error("Failed to locate package.json");
+    }
+
     const json = await readJSONFile(packageJsonFilePath);
     logger.debug("dm version " + json.version);
 }
