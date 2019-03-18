@@ -24,14 +24,20 @@ export class BuildProxy {
         return await sendHttpRequest<void>("POST", url, body);
     }
 
-    async list(workspaceName: string): Promise<AppDTO[]> {
-        logger.debug("list", workspaceName);
+    async list(): Promise<AppDTO[]> {
+        logger.debug("list");
 
         const body: ListDTO = {
             cwd: process.cwd(),
         }
 
         return await sendHttpRequest<AppDTO[]>("GET", "/list", body);
+    }
+
+    async app(appName: string): Promise<AppDTO> {
+        logger.debug("app", appName);
+
+        return await sendHttpRequest<AppDTO>("GET", "/app/" + appName);
     }
 
     async initApp(appName: string, port?: number): Promise<void> {

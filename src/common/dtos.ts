@@ -18,6 +18,7 @@ export interface AppConfig {
     main: string;
     cwd: string;
     args: string[];
+    log: string;
 }
 
 export interface WorkspaceRuntime {
@@ -65,6 +66,15 @@ export interface AppDTO {
     error: string;
     port: number;
     ping: string;
+    config: AppConfigDTO;
+}
+
+export interface AppConfigDTO {
+    name: string;
+    main: string;
+    cwd: string;
+    args: string[];
+    log: string;
 }
 
 export interface PingDTO {

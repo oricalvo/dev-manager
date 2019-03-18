@@ -3,7 +3,7 @@
 import {createConsoleLogger, createLogger, LOGGER} from "../common/logger";
 import {AppDTO, AppStatus} from "../common/dtos";
 import {BuildProxy} from "../common/proxy";
-import {restartApps, runApps, startApps, stopApps} from "../common/common";
+import {replaceAll, restartApps, runApps, startApps, stopApps} from "../common/common";
 import {loadConfigFrom} from "../common/config";
 import {DMError} from "../common/errors";
 import {spawn} from "child_process";
@@ -46,6 +46,9 @@ export async function main() {
         }
         else if (cmd == "version") {
             await version(args);
+        }
+        else if (cmd == "log") {
+            await log(args);
         }
         else {
             throw new Error("Unexpected command " + cmd);
@@ -161,6 +164,28 @@ async function version(args: string[]) {
     logger.debug("dm version " + json.version);
 }
 
+async function log(args: string[]) {
+    const config = await loadConfigFrom(process.cwd());
+
+    const appName = args[0];
+    if(!appName) {
+        throw new Error("appName parameter is missing");
+    }
+
+    const proxy = new BuildProxy(config);
+    const app: AppDTO = await proxy.app(config.name);
+
+    const logFilePath = replaceAll(app.config.log, "${PID}", app.pid);
+    if(!await fileExists(logFilePath)) {
+        logger.warn("Application log file was not found at: " + logFilePath);
+        return;
+    }
+
+    spawn("tail", ["-f", logFilePath], {
+        stdio: "inherit"
+    });
+}
+
 async function serverStart() {
     try {
         await BuildProxy.alive();
@@ -207,7 +232,7 @@ async function list() {
     const config = await loadConfigFrom(process.cwd());
 
     const proxy = new BuildProxy(config);
-    const apps: AppDTO[] = await proxy.list(config.name);
+    const apps: AppDTO[] = await proxy.list();
 
     logger.debug();
     logger.debug("Name".padEnd(17, " ") + "Status".padEnd(10, " ") + "PID".padEnd(7, " ") + "Error".padEnd(10, " ") + "Ping".padEnd(10, " "));
