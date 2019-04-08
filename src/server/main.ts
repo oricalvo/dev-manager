@@ -7,6 +7,7 @@ import {
     AppDTO,
     AppRuntime,
     AppStatus,
+    DisableDTO,
     ListDTO,
     PingDTO,
     StartDTO,
@@ -20,7 +21,6 @@ import {Mapper_App_AppDTO} from "./mappers";
 import {loadConfigFrom} from "../common/config";
 import * as colors from "colors";
 import {delay} from "../common/promise.helpers";
-import {weekdays} from "moment";
 import * as path from "path";
 
 const logger = createLogger();
@@ -40,6 +40,7 @@ export function main() {
     app.post("/api/start", promisifyExpressApi(start));
     app.post("/api/restart", promisifyExpressApi(restart));
     app.post("/api/stop", promisifyExpressApi(stop));
+    app.post("/api/disable", promisifyExpressApi(disable));
     app.get("/api/list", promisifyExpressApi(list));
 
     app.post("/api/:workspace/:app/ping", promisifyExpressApi(ping));
@@ -162,33 +163,6 @@ async function ping(req) {
     app.ping = new Date();
 }
 
-// async function exit(req) {
-//     logger.debug("exit", req.params.name, req.body);
-//
-//     const workspaceName = req.params.workspace;
-//     if(!workspaceName) {
-//         throw new Error("workspace is missing");
-//     }
-//
-//     const appName = req.params.app;
-//     if(!appName) {
-//         throw new Error("app is missing");
-//     }
-//
-//     const body: ExitDTO = req.body;
-//
-//     const work = await loadWorkspace(body.cwd);
-//     const app = getOrCreateApp(work, appName);
-//
-//     if(app.proc) {
-//         app.proc.unref();
-//         app.proc = null;
-//     }
-//
-//     app.error = body.error;
-//     app.status = AppStatus.Exited;
-// }
-
 async function stop(req) {
     logger.debug("stop", req.body);
 
@@ -200,6 +174,17 @@ async function stop(req) {
     stopApps(work, names);
 }
 
+async function disable(req) {
+    logger.debug("disable", req.body);
+
+    const body: DisableDTO = req.body;
+
+    const work = await loadWorkspace(body.cwd);
+    const names = body.names || work.config.apps.map(a=>a.name);
+
+    disableApps(work, names);
+}
+
 function stopApps(work: WorkspaceRuntime, names: string[]) {
     for(const appName of names) {
         const app = getOrCreateApp(work, appName);
@@ -207,8 +192,20 @@ function stopApps(work: WorkspaceRuntime, names: string[]) {
     }
 }
 
+function disableApps(work: WorkspaceRuntime, names: string[]) {
+    for(const appName of names) {
+        const app = getOrCreateApp(work, appName);
+        disableApp(app);
+    }
+}
+
 async function stopApp(app: AppRuntime) {
     logger.debug("stopApp", app.name);
+
+    if(app.status == AppStatus.Disabled) {
+        logger.debug("Do not stop app because it is in Disabled status");
+        return;
+    }
 
     if (app.proc) {
         logger.debug("process.kill", app.proc.pid);
@@ -216,100 +213,20 @@ async function stopApp(app: AppRuntime) {
         app.status = AppStatus.Stopping;
 
         process.kill(app.proc.pid);
-
-        // app.proc.unref();
-        // app.proc = null;
-        //
-        // app.status = AppStatus.Stopped;
-        // app.error = null;
-        // app.message = null;
     }
 }
 
-// async function restartApps(req) {
-//     logger.debug("restartApps", req.body);
-//
-//     const body: KillApps = req.body;
-//     const names = body.names || apps.keys();
-//
-//     for(const name of names) {
-//         killApp(name, "Killed by user");
-//     }
-//
-//     for(const name of names) {
-//         runApp(name, "Restart by user");
-//     }
-// }
+async function disableApp(app: AppRuntime) {
+    logger.debug("disableApp", app.name);
 
-// async function debugApp(req) {
-//     logger.debug("debugApp", req.body);
-//
-//     const body: DebugApp = req.body;
-//     if(!body.name) {
-//         throw new Error("Invalid request. body.name is missing");
-//     }
-//
-//     const app = getApp(body.name);
-//
-//     process["_debugProcess"](app.pid);
-//
-//     await delay(500);
-//
-//     logger.debug("Now you should open Chrome and navigate to chrome://inspect");
-// }
+    if (app.proc) {
+        logger.debug("process.kill", app.proc.pid);
 
-// export function killAllApps(status: string) {
-//     for(const [name, app] of apps) {
-//         if(app.pid) {
-//             killApp(name, status);
-//         }
-//     }
-// }
+        app.status = AppStatus.Disabled;
 
-// export function restartAll(message: string) {
-//     for(const [name, app] of apps) {
-//         if(app.status == AppStatus.Stopped) {
-//             continue;
-//         }
-//
-//         killApp(name, message);
-//     }
-//
-//     for(const [name, app] of apps) {
-//         if(app.status == AppStatus.Stopped) {
-//             continue;
-//         }
-//
-//         runApp(name, message);
-//     }
-// }
-
-// function killApp(name: string, status: string) {
-//     logger.debug("killApp", name);
-//
-//     try {
-//         const app = findApp(name);
-//         if (app && app.pid) {
-//             process.kill(app.pid);
-//
-//             app.status = AppStatus.Killed;
-//             app.pid = null;
-//             app.message = status;
-//         }
-//     }
-//     catch(err) {
-//         logger.error("Failed to kill app " + name);
-//     }
-// }
-
-// function findApp(work: WorkspaceRuntime, name: string) {
-//     const app = work.apps.find(app => app.name.toLowerCase() == name.toLowerCase());
-//     if(!app) {
-//         return null;
-//     }
-//
-//     return app;
-// }
+        process.kill(app.proc.pid);
+    }
+}
 
 function findWorkspace(name: string): WorkspaceRuntime {
     const app = workspaces.get(name.toLowerCase());
@@ -436,6 +353,11 @@ function createAppRuntime(workspace: WorkspaceRuntime, config: AppConfig) {
 export function startApp(app: AppRuntime) {
     logger.debug("startApp", app.name);
 
+    if(app.status == AppStatus.Disabled) {
+        logger.debug("Do not start app because it is in Disabled status");
+        return;
+    }
+
     if(app.proc) {
         //
         //  Already running
@@ -461,7 +383,13 @@ export function startApp(app: AppRuntime) {
         proc.on("close", function () {
             if (app.status == AppStatus.Stopping) {
                 app.status = AppStatus.Stopped;
-            } else {
+            }
+            else if (app.status == AppStatus.Disabled) {
+                //
+                //  Keep the status
+                //
+            }
+            else {
                 app.status = AppStatus.Killed;
             }
 

@@ -49,6 +49,7 @@ export enum AppStatus {
     Exited,
     Closed,
     Unknown,
+    Disabled,
 }
 
 export interface KillApps {
@@ -84,6 +85,11 @@ export interface StartDTO {
 }
 
 export interface StopDTO {
+    cwd: string;
+    names: string[];
+}
+
+export interface DisableDTO {
     cwd: string;
     names: string[];
 }
