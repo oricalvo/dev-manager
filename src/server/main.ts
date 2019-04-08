@@ -7,20 +7,23 @@ import {
     AppDTO,
     AppRuntime,
     AppStatus,
+    GetAppDTO,
     DisableDTO,
     ListDTO,
     PingDTO,
     StartDTO,
     StopDTO,
-    WorkspaceConfig,
     WorkspaceRuntime
 } from "../common/dtos";
 import {registerService} from "oc-tools/serviceLocator";
 import {spawn} from "child_process";
-import {Mapper_App_AppDTO} from "./mappers";
+import {Mapper_AppRuntime_AppDTO} from "./mappers";
 import {loadConfigFrom} from "../common/config";
 import * as colors from "colors";
 import {delay} from "../common/promise.helpers";
+import {getAppConfig, getAppWorkingDirectory} from "../common/common";
+import * as http from "http";
+import {parseQueryParams} from "oc-tools/http";
 import * as path from "path";
 
 const logger = createLogger();
@@ -30,34 +33,35 @@ const workspaces = new Map<string, WorkspaceRuntime>();
 export function main() {
     registerService(LOGGER, createWinstonLogger("dm.log", true, "dm"));
 
-    const app = express();
+    try {
+        const app = express();
+        const server = http.createServer(app);
 
-    app.use(bodyParser.json());
-    app.use(bodyParser.text());
+        app.use(bodyParser.json());
+        app.use(bodyParser.text());
 
-    app.get("/api/alive", promisifyExpressApi(alive));
-    app.post("/api/shutdown", promisifyExpressApi(() => shutdown(app)));
-    app.post("/api/start", promisifyExpressApi(start));
-    app.post("/api/restart", promisifyExpressApi(restart));
-    app.post("/api/stop", promisifyExpressApi(stop));
-    app.post("/api/disable", promisifyExpressApi(disable));
-    app.get("/api/list", promisifyExpressApi(list));
+        app.get("/api/alive", promisifyExpressApi(alive));
+        app.post("/api/shutdown", promisifyExpressApi(() => shutdown(app)));
+        app.post("/api/start", promisifyExpressApi(start));
+        app.post("/api/restart", promisifyExpressApi(restart));
+        app.post("/api/stop", promisifyExpressApi(stop));
+        app.get("/api/list", promisifyExpressApi(list));
+        app.get("/api/app/:name", promisifyExpressApi(getApp));
+        app.post("/api/:workspace/:app/ping", promisifyExpressApi(ping));
 
-    app.post("/api/:workspace/:app/ping", promisifyExpressApi(ping));
-    // app.post("/api/:workspace/:app/exit", promisifyExpressApi(exit));
+        server.on("error", function(err) {
+            logger.error(err);
+            logger.error("Server encountered error. Exiting ...");
+            process.exit(1);
+        });
 
-    // app.post("/api/:workspace/restart", promisifyExpressApi(restartAllApp));
-    // app.post("/api/:workspace/kill", promisifyExpressApi(killApp));
-    // app.post("/api/app/:app/restart", promisifyExpressApi(restartApps));
-    // app.post("/api/:worksapce/app/:name/init", promisifyExpressApi(initApp));
-    // app.post("/api/app/restart", promisifyExpressApi(restartApps));
-    // app.post("/api/app/debug", promisifyExpressApi(debugApp));
-
-    // watchFS();
-
-    app.listen(7070, function () {
-        logger.debug("Server is running on port 7070");
-    });
+        server.listen(7070, function () {
+            logger.debug("Server is running on port 7070");
+        });
+    }
+    catch(err) {
+        logger.error(err);
+    }
 }
 
 function alive(req) {
@@ -80,7 +84,7 @@ async function start(req): Promise<AppDTO[]> {
 
     startApps(work, names);
 
-    return work.apps.map(Mapper_App_AppDTO);
+    return work.apps.map(Mapper_AppRuntime_AppDTO);
 }
 
 function startApps(work: WorkspaceRuntime, names: string[]) {
@@ -95,34 +99,34 @@ function startApps(work: WorkspaceRuntime, names: string[]) {
 async function list(req): Promise<AppDTO[]> {
     logger.debug("list", req.body);
 
-    const body: ListDTO = req.body;
+    const body = parseQueryParams<ListDTO>(req.query);
+    if(!body.cwd) {
+        throw new Error("Missing cwd parameter");
+    }
 
     const work = await loadWorkspace(body.cwd);
 
-    return work.apps.map(Mapper_App_AppDTO);
+    return work.apps.map(Mapper_AppRuntime_AppDTO);
 }
 
-// async function initApp(req) {
-//     logger.debug("initApp", req.body);
-//
-//     const name = req.params.name;
-//     if(!name) {
-//         throw new Error("name is missing");
-//     }
-//
-//     const app = getApp(name);
-//
-//     const body: App = req.body;
-//     if(!body.pid) {
-//         throw new Error("pid is missing");
-//     }
-//
-//     app.status = AppStatus.Running;
-//     app.port = body.port;
-//     app.pid = body.pid;
-//
-//     app.message = "Init ack received";
-// }
+async function getApp(req): Promise<AppDTO> {
+    logger.debug("getApp", req.body);
+
+    const {name} = req.params;
+    if(!name) {
+        throw new Error("Missing name parameter");
+    }
+
+    const body = parseQueryParams<GetAppDTO>(req.query);
+    if(!body.cwd) {
+        throw new Error("Missing cwd parameter");
+    }
+
+    const work = await loadWorkspace(body.cwd);
+    const app = findAppByName(work, name);
+
+    return Mapper_AppRuntime_AppDTO(app);
+}
 
 async function restart(req) {
     logger.debug("restartApp", req.body);
@@ -202,29 +206,12 @@ function disableApps(work: WorkspaceRuntime, names: string[]) {
 async function stopApp(app: AppRuntime) {
     logger.debug("stopApp", app.name);
 
-    if(app.status == AppStatus.Disabled) {
-        logger.debug("Do not stop app because it is in Disabled status");
-        return;
-    }
+    if (app.pid) {
+        logger.debug("process.kill", app.pid);
 
-    if (app.proc) {
-        logger.debug("process.kill", app.proc.pid);
+        process.kill(app.pid);
 
-        app.status = AppStatus.Stopping;
-
-        process.kill(app.proc.pid);
-    }
-}
-
-async function disableApp(app: AppRuntime) {
-    logger.debug("disableApp", app.name);
-
-    if (app.proc) {
-        logger.debug("process.kill", app.proc.pid);
-
-        app.status = AppStatus.Disabled;
-
-        process.kill(app.proc.pid);
+        app.status = AppStatus.Stopped;
     }
 }
 
@@ -237,22 +224,13 @@ function findWorkspace(name: string): WorkspaceRuntime {
     return app;
 }
 
-function findApp(workspace: WorkspaceRuntime, appName: string): AppRuntime {
+function findAppByName(workspace: WorkspaceRuntime, appName: string): AppRuntime {
     const app = workspace.apps.find(a => a.name.toLowerCase() == appName.toLowerCase());
     return app;
 }
 
-function getAppConfig(workspace: WorkspaceConfig, appName: string): AppConfig {
-    const app = workspace.apps.find(a => a.name.toLowerCase() == appName.toLowerCase());
-    if(!app) {
-        throw new Error("App config with name " + appName + " was not found");
-    }
-
-    return app;
-}
-
-function getApp(work: WorkspaceRuntime, name: string) {
-    const app = findApp(work, name);
+function getAppByName(work: WorkspaceRuntime, name: string): AppRuntime {
+    const app = findAppByName(work, name);
     if(!app) {
         throw new Error("App with name " + name + " was not found");
     }
@@ -305,23 +283,8 @@ async function loadWorkspace(cwd: string): Promise<WorkspaceRuntime> {
     return work;
 }
 
-// function getOrCreateWorkspace(workspaceName: string): WorkspaceRuntime {
-//     let work = findWorkspace(workspaceName);
-//     if(!work) {
-//         work = {
-//             name: workspaceName,
-//             config: null,
-//             apps: [],
-//         }
-//
-//         workspaces.set(workspaceName, work);
-//     }
-//
-//     return work;
-// }
-
 function getOrCreateApp(workspace: WorkspaceRuntime, appName: string): AppRuntime {
-    let app = findApp(workspace, appName);
+    let app = findAppByName(workspace, appName);
     if(!app) {
         const appConfig = getAppConfig(workspace.config, appName);
         app = createAppRuntime(workspace, appConfig);
@@ -366,9 +329,7 @@ export function startApp(app: AppRuntime) {
     }
 
     try {
-        const cwd = (app.config.cwd && path.resolve(app.workspace.config.basePath, app.config.cwd)) || process.cwd();
-
-        console.log("xxx", cwd);
+        const cwd = getAppWorkingDirectory(app.workspace.config, app.config);
 
         const proc = spawn("node", [app.config.main, ...app.config.args], {
                 cwd,
@@ -381,6 +342,7 @@ export function startApp(app: AppRuntime) {
         app.status = AppStatus.Running;
 
         proc.on("close", function () {
+            if (app.status != AppStatus.Stopped) {
             if (app.status == AppStatus.Stopping) {
                 app.status = AppStatus.Stopped;
             }
@@ -406,16 +368,6 @@ export function startApp(app: AppRuntime) {
             app.proc = null;
             app.pid = null;
         });
-
-        // proc.stdout.on("data", function(data) {
-        //     const messages = data.toString().split("\n");
-        //     for(let message of messages) {
-        //         message = message.trim();
-        //         if(message) {
-        //             console.log(app.color(app.name + "> " + message));
-        //         }
-        //     }
-        // });
     }
     catch(err) {
         app.error = err.message;
@@ -424,36 +376,5 @@ export function startApp(app: AppRuntime) {
     }
 }
 
-// function watchFS() {
-//     const srcDir = path.resolve(__dirname, "..");
-//     var watcher = chokidar.watch(srcDir, {
-//         persistent: true
-//     });
-//
-//     let timeoutId = null;
-//     let hasJSChange = false;
-//     watcher.on('change', filePath => {
-//         if (path.extname(filePath) == ".js") {
-//             hasJSChange = true;
-//         }
-//
-//         clearTimeout(timeoutId);
-//
-//         timeoutId = setTimeout(function () {
-//             if (hasJSChange) {
-//                 logger.debug("File changed: " + filePath);
-//
-//                 restartAll("Restart by file changed");
-//             }
-//
-//             timeoutId = null;
-//             hasJSChange = false;
-//         }, 200);
-//     });
-// }
-
 main();
 
-// interface ExitAppRequestDTO {
-//     error: string;
-// }

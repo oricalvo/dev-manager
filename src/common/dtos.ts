@@ -18,6 +18,7 @@ export interface AppConfig {
     main: string;
     cwd: string;
     args: string[];
+    log: string;
 }
 
 export interface WorkspaceRuntime {
@@ -43,7 +44,6 @@ export interface AppRuntime {
 export enum AppStatus {
     None,
     Running,
-    Stopping,
     Stopped,
     Killed,
     Exited,
@@ -67,6 +67,15 @@ export interface AppDTO {
     error: string;
     port: number;
     ping: string;
+    config: AppConfigDTO;
+}
+
+export interface AppConfigDTO {
+    name: string;
+    main: string;
+    cwd: string;
+    args: string[];
+    log: string;
 }
 
 export interface PingDTO {
@@ -95,5 +104,9 @@ export interface DisableDTO {
 }
 
 export interface ListDTO{
+    cwd: string;
+}
+
+export interface GetAppDTO{
     cwd: string;
 }

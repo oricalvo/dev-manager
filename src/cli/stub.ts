@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 
 import * as path from "path";
-import {createConsoleLogger, createLogger, LOGGER} from "../common/logger";
 import {fileExists} from "oc-tools/fs";
-import {registerService} from "oc-tools/serviceLocator";
 
 async function main() {
     let dir = process.cwd();

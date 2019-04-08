@@ -1,6 +1,6 @@
-import {httpRequest} from "./http.helpers";
 import {createLogger} from "./logger";
-import {AppRuntime, AppDTO, PingDTO, WorkspaceConfig, StartDTO, StopDTO, ListDTO, ExitDTO} from "./dtos";
+import {AppRuntime, AppDTO, PingDTO, WorkspaceConfig, StartDTO, StopDTO, ListDTO, ExitDTO, GetAppDTO} from "./dtos";
+import {httpRequest, HttpRequestOptions} from "oc-tools/http";
 
 const logger = createLogger("BuildProxy");
 
@@ -21,17 +21,39 @@ export class BuildProxy {
             names,
         };
 
-        return await sendHttpRequest<void>("POST", url, body);
+        return await sendHttpRequest<void>({
+            method: "POST",
+            url,
+            data: body
+        });
     }
 
-    async list(workspaceName: string): Promise<AppDTO[]> {
-        logger.debug("list", workspaceName);
+    async list(): Promise<AppDTO[]> {
+        logger.debug("list");
 
         const body: ListDTO = {
             cwd: process.cwd(),
         }
 
-        return await sendHttpRequest<AppDTO[]>("GET", "/list", body);
+        return await sendHttpRequest<AppDTO[]>({
+            method: "GET",
+            url: "/list",
+            data: body
+        });
+    }
+
+    async app(appName: string): Promise<AppDTO> {
+        logger.debug("app", appName);
+
+        const data: GetAppDTO = {
+            cwd: process.cwd(),
+        }
+
+        return await sendHttpRequest<AppDTO>({
+            method: "GET",
+            url: "/app/" + appName,
+            data,
+        });
     }
 
     async initApp(appName: string, port?: number): Promise<void> {
@@ -39,8 +61,12 @@ export class BuildProxy {
 
         const url = "/" + this.config.name + "/" + appName + "/init";
 
-        return await sendHttpRequest<void>("POST", url, {
-            port,
+        return await sendHttpRequest<void>({
+            method: "POST",
+            url,
+            data: {
+                port,
+            }
         });
     }
 
@@ -53,15 +79,22 @@ export class BuildProxy {
             error: error && error.message,
         }
 
-        return await sendHttpRequest<void>("POST", url, body);
+        return await sendHttpRequest<void>({
+            method: "POST",
+            url,
+            data: body
+        });
     }
 
     async ping(name: string, body: PingDTO) {
         logger.debug("ping", name, body);
 
         const url = "/" + this.config.name + "/" + name + "/ping";
-        return await sendHttpRequest<void>("POST", url, body);
-
+        return await sendHttpRequest<void>({
+            method: "POST",
+            url,
+            data: body
+        });
     }
 
     async stop(names: string[]) {
@@ -72,7 +105,11 @@ export class BuildProxy {
             cwd: process.cwd(),
             names,
         }
-        return await sendHttpRequest<void>("POST", url, body);
+        return await sendHttpRequest<void>({
+            method: "POST",
+            url,
+            data: body
+        });
     }
 
     async restart(names: string[]) {
@@ -85,29 +122,46 @@ export class BuildProxy {
             names,
         };
 
-        return await sendHttpRequest<void>("POST", url, body);
+        return await sendHttpRequest<void>({
+            method: "POST",
+            url,
+            data: body
+        });
     }
 
     async debug(name: string) {
         logger.debug("debug", name);
 
-        return await sendHttpRequest<void>("POST", "/app/debug", {
-            name,
+        return await sendHttpRequest<void>({
+            method: "POST",
+            url: "/app/debug",
+            data: {
+                name,
+            }
         });
     }
 
     static async alive() {
-        return await sendHttpRequest<void>("GET", "/alive", undefined, true);
+        return await sendHttpRequest<void>({
+            method: "GET",
+            url: "/alive",
+            dontParseBody: true
+        });
     }
 
     static async shutdown() {
-        await sendHttpRequest<void>("POST", "/shutdown");
+        await sendHttpRequest<void>({
+            method: "POST",
+            url: "/shutdown"
+        });
     }
 }
 
-async function sendHttpRequest<T>(method: string, url: string, data?: any, dontParseBody?: boolean): Promise<T> {
-    logger.debug("sendHttpRequest", method, url, data, dontParseBody);
+async function sendHttpRequest<T>(options: HttpRequestOptions): Promise<T> {
+    logger.debug("sendHttpRequest", options);
 
-    const res = await httpRequest<T>(method, BASE_URL + url, data, undefined, dontParseBody);
-    return res;
+    return await httpRequest({
+        ...options,
+        url: BASE_URL + options.url,
+    });
 }

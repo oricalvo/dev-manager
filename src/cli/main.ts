@@ -3,13 +3,14 @@
 import {createConsoleLogger, createLogger, LOGGER} from "../common/logger";
 import {AppDTO, AppStatus} from "../common/dtos";
 import {BuildProxy} from "../common/proxy";
-import {restartApps, startApps, stopApps} from "../common/common";
+import {replaceAll, restartApps, runApps, startApps, stopApps} from "../common/common";
 import {loadConfigFrom} from "../common/config";
 import {DMError} from "../common/errors";
 import {spawn} from "child_process";
 import * as path from "path";
 import {delay, waitForEvent} from "../common/promise.helpers";
 import {registerService} from "oc-tools/serviceLocator";
+import {fileExists, readJSONFile} from "oc-tools/fs";
 
 const logger = createLogger();
 
@@ -25,6 +26,9 @@ export async function main() {
         if (cmd == "start") {
             await start(args);
         }
+        else if (cmd == "run") {
+            await run(args);
+        }
         else if (cmd == "restart") {
             await restart(args);
         }
@@ -39,6 +43,12 @@ export async function main() {
         }
         else if (cmd == "server") {
             await server(args);
+        }
+        else if (cmd == "version") {
+            await version(args);
+        }
+        else if (cmd == "log") {
+            await log(args);
         }
         else {
             throw new Error("Unexpected command " + cmd);
@@ -70,6 +80,18 @@ async function start(args) {
     await list();
 }
 
+async function run(args) {
+    //
+    //  Run requested app inside current shell (not through dm server)
+    //
+    const appName = args[0];
+
+    const config = await loadConfigFrom(process.cwd());
+    const names = appName ? [appName] : undefined;
+
+    await runApps(config, names);
+}
+
 async function restart(args) {
     const appName = args[0];
 
@@ -96,14 +118,6 @@ async function build() {
     if(!build) {
         throw new Error("build configuration is missing");
     }
-
-    // const [command, ...args] = config.build.split(" ");
-    // const info = path.parse(command);
-
-    // const exeName = info.base;
-    // const cwd = path.resolve(config.basePath, info.dir);
-
-    // logger.debug(command, args);
 
     logger.debug("Running build command:", build.command, "at", path.resolve(config.basePath, build.cwd));
 
@@ -134,6 +148,65 @@ async function server(args: string[]) {
     else {
         throw new DMError("Unknown command: " + cmd);
     }
+}
+
+async function version(args: string[]) {
+    let packageJsonFilePath = path.resolve(__dirname, "../package.json");
+    if(!await fileExists(packageJsonFilePath)) {
+        packageJsonFilePath = path.resolve(__dirname, "./package.json");
+    }
+
+    if(!await fileExists(packageJsonFilePath)) {
+        throw new Error("Failed to locate package.json");
+    }
+
+    const json = await readJSONFile(packageJsonFilePath);
+    logger.debug("dm version " + json.version);
+}
+
+function resolveVars(str: string, vars: object) {
+    let res = str;
+
+    for(const key in vars) {
+        res = replaceAll(res, "${" + key.toUpperCase() + "}", vars[key]);
+    }
+
+    if(res.indexOf("${") != -1) {
+        //
+        //
+        //
+        throw new Error("Failed to resolve all vars inside string " + str + " --> " + res);
+    }
+
+    return res;
+}
+
+async function log(args: string[]) {
+    const config = await loadConfigFrom(process.cwd());
+
+    const appName = args[0];
+    if(!appName) {
+        throw new Error("appName parameter is missing");
+    }
+
+    const proxy = new BuildProxy(config);
+    const app: AppDTO = await proxy.app(appName);
+    if(!app.config.log) {
+        throw new Error("No log path is defined for app " + appName);
+    }
+
+    const logFilePath = resolveVars(app.config.log, {
+        pid: app.pid,
+    });
+
+    if (!await fileExists(logFilePath)) {
+        logger.warn("Application log file was not found at: " + logFilePath);
+        return;
+    }
+
+    spawn("tail", ["-f", logFilePath], {
+        stdio: "inherit"
+    });
 }
 
 async function serverStart() {
@@ -182,7 +255,7 @@ async function list() {
     const config = await loadConfigFrom(process.cwd());
 
     const proxy = new BuildProxy(config);
-    const apps: AppDTO[] = await proxy.list(config.name);
+    const apps: AppDTO[] = await proxy.list();
 
     logger.debug();
     logger.debug("Name".padEnd(17, " ") + "Status".padEnd(10, " ") + "PID".padEnd(7, " ") + "Error".padEnd(10, " ") + "Ping".padEnd(10, " "));
