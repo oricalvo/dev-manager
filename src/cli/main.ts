@@ -40,6 +40,9 @@ export async function main() {
         else if (cmd == "stop") {
             await stop(args);
         }
+        else if (cmd == "disable") {
+            await disable(args);
+        }
         else if (cmd == "build") {
             await build();
         }
@@ -82,34 +85,25 @@ async function start(args) {
     await list();
 }
 
-async function run(args) {
-    //
-    //  Run requested app inside current shell (not through dm server)
-    //
-    const appName = args[0];
-
+async function run(names) {
     const config = await loadConfigFrom(process.cwd());
-    const names = appName ? [appName] : undefined;
-
     await runApps(config, names);
 }
 
-async function restart(args) {
-    const appName = args[0];
-
+async function restart(names) {
     const config = await loadConfigFrom(process.cwd());
-    const names = appName ? [appName] : undefined;
-
     await restartApps(config, names);
     await list();
 }
 
-async function stop(args) {
-    const appName = args[0];
-
+async function stop(names) {
     const config = await loadConfigFrom(process.cwd());
-    const names = appName ? [appName] : undefined;
+    await stopApps(config, names);
+    await list();
+}
 
+async function disable(names) {
+    const config = await loadConfigFrom(process.cwd());
     await stopApps(config, names);
     await list();
 }

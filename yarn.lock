@@ -586,6 +586,36 @@ dev-manager@^1.0.45:
     split2 "^3.1.1"
     typescript "^3.4.1"
 
+dev-manager@^1.0.46:
+  version "1.0.46"
+  resolved "https://registry.yarnpkg.com/dev-manager/-/dev-manager-1.0.46.tgz#e898b226ecbad3a3b7e3d2f97f54c39c0e8a651a"
+  integrity sha512-0uzGIF2M1bBOber2z4jMipBBinEcToYxwYPY4lJyi4z5vSYLHMJOlXDYe9vWsK2w5yQTU5s8k0uvP7zPNjHkNQ==
+  dependencies:
+    "@types/node" "^11.9.5"
+    "@types/request" "^2.48.1"
+    colors "^1.3.3"
+    dev-manager "^1.0.45"
+    express "^4.16.4"
+    moment "^2.24.0"
+    oc-tools "^1.0.51"
+    split2 "^3.1.1"
+    typescript "^3.4.1"
+
+dev-manager@^1.0.47:
+  version "1.0.47"
+  resolved "https://registry.yarnpkg.com/dev-manager/-/dev-manager-1.0.47.tgz#f8a0409059846b6525effa324d35c81d628bce17"
+  integrity sha512-LDQVkwDa4DlG56gyuLO2i/xHJDxIWmistk3znHHzqakEJHG7ciQ6n2/9tZWwBGJWr/geNIAT7sniAjM9X5uaIg==
+  dependencies:
+    "@types/node" "^11.9.5"
+    "@types/request" "^2.48.1"
+    colors "^1.3.3"
+    dev-manager "^1.0.46"
+    express "^4.16.4"
+    moment "^2.24.0"
+    oc-tools "^1.0.51"
+    split2 "^3.1.1"
+    typescript "^3.4.1"
+
 diagnostics@^1.1.1:
   version "1.1.1"
   resolved "https://registry.yarnpkg.com/diagnostics/-/diagnostics-1.1.1.tgz#cab6ac33df70c9d9a727490ae43ac995a769b22a"
