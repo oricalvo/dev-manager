@@ -3,6 +3,7 @@ import {AppRuntime, AppDTO, PingDTO, WorkspaceConfig, StartDTO, StopDTO, ListDTO
 import {httpRequest, HttpRequestOptions} from "oc-tools/http";
 
 const logger = createLogger("BuildProxy");
+logger.disable();
 
 const BASE_URL = "http://localhost:7070/api";
 
@@ -158,7 +159,7 @@ export class BuildProxy {
 }
 
 async function sendHttpRequest<T>(options: HttpRequestOptions): Promise<T> {
-    // logger.debug("sendHttpRequest", options);
+    logger.debug("sendHttpRequest", options);
 
     return await httpRequest({
         ...options,
