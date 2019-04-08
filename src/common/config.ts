@@ -23,12 +23,17 @@ export async function loadConfigFrom(dir: string): Promise<WorkspaceConfig> {
         const config: WorkspaceConfig = await readJSONFile(filePath);
         config.basePath = dir;
 
-        for(const app of config.apps) {
-            if (!app.cwd) {
-                app.cwd = config.basePath;
-            }
+        if(config.apps) {
+            for (const app of config.apps) {
+                if (!app.cwd) {
+                    app.cwd = config.basePath;
+                }
 
-            app.args = app.args || [];
+                app.args = app.args || [];
+            }
+        }
+        else {
+            config.apps = [];
         }
 
         return config;

@@ -11,6 +11,8 @@ import * as path from "path";
 import {delay, waitForEvent} from "../common/promise.helpers";
 import {registerService} from "oc-tools/serviceLocator";
 import {fileExists, readJSONFile} from "oc-tools/fs";
+import {using} from "../common/object.helpers";
+import {LineReader} from "../common/lineReader";
 
 const logger = createLogger();
 
@@ -116,18 +118,37 @@ async function build() {
     const config = await loadConfigFrom(process.cwd());
     const {build} = config;
     if(!build) {
-        throw new Error("build configuration is missing");
+        throw new Error("No build configuration");
     }
 
-    logger.debug("Running build command:", build.command, "at", path.resolve(config.basePath, build.cwd));
+    if(build.tsconfig) {
+        const tsconfigFilePath = path.resolve(config.basePath, build.tsconfig);
 
-    const proc = spawn(build.command, build.args, {
-        stdio: "inherit",
-        shell: true,
-        cwd: path.resolve(config.basePath, build.cwd),
-    });
+        const before = new Date();
 
-    await waitForEvent(proc, "close", true);
+        logger.debug("Compiling typescript at " + tsconfigFilePath);
+        const stats = await compileTsc(tsconfigFilePath);
+        const now = new Date();
+
+        logger.debug(stats.errors + " errors, " + stats.files + " files, exit code " + stats.exitCode);
+        logger.debug("Done in " + (now.valueOf() - before.valueOf()) / 1000 + " seconds");
+
+        if(!stats.errors && stats.files) {
+            logger.debug("Restarting apps ... ");
+            await restart([]);
+        }
+    }
+    else {
+        logger.debug("Running build command:", build.command, "at", path.resolve(config.basePath, build.cwd));
+
+        const proc = spawn(build.command, build.args, {
+            stdio: "inherit",
+            shell: true,
+            cwd: path.resolve(config.basePath, build.cwd),
+        });
+
+        await waitForEvent(proc, "close", true);
+    }
 }
 
 async function server(args: string[]) {
@@ -270,6 +291,101 @@ async function list() {
         const line = name.padEnd(17, " ") + status.padEnd(10, " ") + pid.padEnd(7, " ") + error.padEnd(10, " ") + ping.padEnd(10, " ");
         logger.debug(line);
     }
+}
+
+
+function compileTsc(tsconfigPath: string): Promise<CompileStats> {
+    return new Promise(async (resolve, reject)=> {
+        const stats: CompileStats = {
+            files: 0,
+            errors: 0,
+            exitCode: -1,
+        };
+
+        try {
+            const tsc = path.resolve("node_modules/.bin/tsc");
+            if (!await fileExists(tsc)) {
+                throw new Error("tsc was not found at: " + tsc);
+            }
+
+            const proc = spawn(tsc, ["-b", tsconfigPath ,"-listEmittedFiles"], {
+                shell: true,
+            });
+
+            Promise.all([
+                readLines(proc.stdout, stats),
+                readLines(proc.stderr, stats)
+            ]);
+
+            proc.on("close", function (code) {
+                stats.exitCode = code;
+
+                resolve(stats);
+            });
+        }
+        catch(err) {
+            reject(err);
+        }
+    });
+}
+
+async function readLines(stream, stats: CompileStats) {
+    await using(LineReader.fromStream(stream), async reader => {
+        while(true) {
+            const line = await reader.next();
+            if(!line) {
+                break;
+            }
+
+            handleLine(line, stats);
+        }
+    });
+}
+
+function handleLine(line: string, stats: CompileStats) {
+    if(line.indexOf(": error") != -1) {
+        ++stats.errors;
+        const start = line.indexOf("(");
+        if (start != -1) {
+            const relFilePath = path.resolve(line.substring(0, start));
+            console.log(relFilePath + line.substring(start));
+            return;
+        }
+    }
+    else if(line.startsWith("TSFILE:")) {
+        ++stats.files;
+        return;
+    }
+
+    console.log(line);
+}
+
+function handleOutput(stats: CompileStats, data) {
+    const line = data.toString();
+    if(line.indexOf(": error")) {
+        ++stats.errors;
+        const start = line.indexOf("(");
+        if (start != -1) {
+            const relFilePath = path.resolve(line.substring(0, start));
+            console.log(relFilePath + line.substring(start));
+            return;
+        }
+    }
+    else if(line.startsWith("TSFILE")) {
+        ++stats.files;
+        return;
+    }
+    else if(line.startsWith("error TS")) {
+        ++stats.errors;
+    }
+
+    console.log(line);
+}
+
+interface CompileStats {
+    exitCode: number;
+    files: number;
+    errors: number;
 }
 
 main();

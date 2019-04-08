@@ -7,8 +7,8 @@ import {
     AppDTO,
     AppRuntime,
     AppStatus,
-    GetAppDTO,
     DisableDTO,
+    GetAppDTO,
     ListDTO,
     PingDTO,
     StartDTO,
@@ -24,7 +24,6 @@ import {delay} from "../common/promise.helpers";
 import {getAppConfig, getAppWorkingDirectory} from "../common/common";
 import * as http from "http";
 import {parseQueryParams} from "oc-tools/http";
-import * as path from "path";
 
 const logger = createLogger();
 
@@ -45,6 +44,7 @@ export function main() {
         app.post("/api/start", promisifyExpressApi(start));
         app.post("/api/restart", promisifyExpressApi(restart));
         app.post("/api/stop", promisifyExpressApi(stop));
+        app.post("/api/disable", promisifyExpressApi(disable));
         app.get("/api/list", promisifyExpressApi(list));
         app.get("/api/app/:name", promisifyExpressApi(getApp));
         app.post("/api/:workspace/:app/ping", promisifyExpressApi(ping));
@@ -140,7 +140,7 @@ async function restart(req) {
     const names = body.names || work.apps.map(a=>a.name);
 
     stopApps(work, names);
-    await delay(1000);
+    await delay(100);
     startApps(work, names);
 }
 
@@ -206,13 +206,29 @@ function disableApps(work: WorkspaceRuntime, names: string[]) {
 async function stopApp(app: AppRuntime) {
     logger.debug("stopApp", app.name);
 
+    if(app.status == AppStatus.Disabled) {
+        return;
+    }
+
     if (app.pid) {
         logger.debug("process.kill", app.pid);
 
         process.kill(app.pid);
-
-        app.status = AppStatus.Stopped;
     }
+
+    app.status = AppStatus.Stopped;
+}
+
+async function disableApp(app: AppRuntime) {
+    logger.debug("stopApp", app.name);
+
+    if (app.pid) {
+        logger.debug("process.kill", app.pid);
+
+        process.kill(app.pid);
+    }
+
+    app.status = AppStatus.Disabled;
 }
 
 function findWorkspace(name: string): WorkspaceRuntime {
@@ -342,16 +358,7 @@ export function startApp(app: AppRuntime) {
         app.status = AppStatus.Running;
 
         proc.on("close", function () {
-            if (app.status != AppStatus.Stopped) {
-            if (app.status == AppStatus.Stopping) {
-                app.status = AppStatus.Stopped;
-            }
-            else if (app.status == AppStatus.Disabled) {
-                //
-                //  Keep the status
-                //
-            }
-            else {
+            if (app.status != AppStatus.Stopped && app.status != AppStatus.Disabled) {
                 app.status = AppStatus.Killed;
             }
 

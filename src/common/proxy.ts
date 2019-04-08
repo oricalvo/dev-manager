@@ -158,7 +158,7 @@ export class BuildProxy {
 }
 
 async function sendHttpRequest<T>(options: HttpRequestOptions): Promise<T> {
-    logger.debug("sendHttpRequest", options);
+    // logger.debug("sendHttpRequest", options);
 
     return await httpRequest({
         ...options,

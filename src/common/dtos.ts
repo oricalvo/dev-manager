@@ -11,6 +11,7 @@ export interface BuildConfig {
     command: string;
     args: string[];
     cwd: string;
+    tsconfig: string;
 }
 
 export interface AppConfig {
