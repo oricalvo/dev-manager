@@ -1,13 +1,13 @@
 import * as express from "express";
 import {createLogger, createWinstonLogger, LOGGER} from "../common/logger";
-import {promisifyExpressApi} from "./express.helpers";
+import {promisifyExpressApi, registerErrorHandler} from "./express.helpers";
 import * as bodyParser from "body-parser";
 import {
     AppConfig,
     AppDTO,
     AppRuntime,
     AppStatus,
-    DisableDTO,
+    EnableDTO,
     GetAppDTO,
     ListDTO,
     PingDTO,
@@ -24,6 +24,7 @@ import {delay} from "../common/promise.helpers";
 import {getAppConfig, getAppWorkingDirectory} from "../common/common";
 import * as http from "http";
 import {parseQueryParams} from "oc-tools/http";
+import {DMError} from "../common/errors";
 
 const logger = createLogger();
 
@@ -44,10 +45,14 @@ export function main() {
         app.post("/api/start", promisifyExpressApi(start));
         app.post("/api/restart", promisifyExpressApi(restart));
         app.post("/api/stop", promisifyExpressApi(stop));
-        app.post("/api/disable", promisifyExpressApi(disable));
+        app.post("/api/enable", promisifyExpressApi(enable));
         app.get("/api/list", promisifyExpressApi(list));
         app.get("/api/app/:name", promisifyExpressApi(getApp));
         app.post("/api/:workspace/:app/ping", promisifyExpressApi(ping));
+
+        registerErrorHandler(app);
+
+        startCheckAlive();
 
         server.on("error", function(err) {
             logger.error(err);
@@ -80,7 +85,7 @@ async function start(req): Promise<AppDTO[]> {
     const body: StartDTO = req.body;
 
     const work = await loadWorkspace(body.cwd);
-    const names = body.names || work.config.apps.map(a=>a.name);
+    const names =  resolveNames(work, body.names);
 
     startApps(work, names);
 
@@ -137,7 +142,7 @@ async function restart(req) {
     }
 
     const work = await loadWorkspace(body.cwd);
-    const names = body.names || work.apps.map(a=>a.name);
+    const names =  resolveNames(work, body.names);
 
     stopApps(work, names);
     await delay(100);
@@ -159,12 +164,27 @@ async function ping(req) {
 
     const body: PingDTO = req.body;
 
+    const now = new Date();
     const work = await loadWorkspace(body.cwd);
     const app = getOrCreateApp(work, appName);
+
+    if(app.status == AppStatus.Disabled) {
+        return;
+    }
+
+    if(app.status == AppStatus.Stopped && (now.valueOf() - app.stopped.valueOf()) < 1000) {
+        //
+        //  There is a race condition between user that is stopping an application and the ping mechanism
+        //  Once app is stopped by the user we ignore all ping request for 1 seconds
+        //
+        logger.debug("Ignore ping because of Stopped state");
+        return;
+    }
+
     app.status = AppStatus.Running;
     app.error = null;
     app.pid = body.pid;
-    app.ping = new Date();
+    app.ping = now;
 }
 
 async function stop(req) {
@@ -173,33 +193,35 @@ async function stop(req) {
     const body: StopDTO = req.body;
 
     const work = await loadWorkspace(body.cwd);
-    const names = body.names || work.config.apps.map(a=>a.name);
+    const names = resolveNames(work, body.names);
 
     stopApps(work, names);
 }
 
-async function disable(req) {
+async function enable(req) {
     logger.debug("disable", req.body);
 
-    const body: DisableDTO = req.body;
+    const body: EnableDTO = req.body;
 
     const work = await loadWorkspace(body.cwd);
-    const names = body.names || work.config.apps.map(a=>a.name);
+    const names = resolveNames(work, body.names);
 
-    disableApps(work, names);
+    enableApps(work, names, body.enable);
 }
 
 function stopApps(work: WorkspaceRuntime, names: string[]) {
+    logger.debug("stopApps", names);
+
     for(const appName of names) {
         const app = getOrCreateApp(work, appName);
         stopApp(app);
     }
 }
 
-function disableApps(work: WorkspaceRuntime, names: string[]) {
+function enableApps(work: WorkspaceRuntime, names: string[], enable: boolean) {
     for(const appName of names) {
         const app = getOrCreateApp(work, appName);
-        disableApp(app);
+        enableApp(app, enable);
     }
 }
 
@@ -213,22 +235,36 @@ async function stopApp(app: AppRuntime) {
     if (app.pid) {
         logger.debug("process.kill", app.pid);
 
-        process.kill(app.pid);
-    }
+        //
+        //  Changing status before killing process
+        //  So when the "close" event fires we can detect that the app was closed and not killed
+        //
+        const pid = app.pid;
 
-    app.status = AppStatus.Stopped;
+        app.status = AppStatus.Stopped;
+        app.pid = null;
+        app.stopped = new Date();
+
+        process.kill(pid);
+    }
 }
 
-async function disableApp(app: AppRuntime) {
-    logger.debug("stopApp", app.name);
+async function enableApp(app: AppRuntime, enable: boolean) {
+    logger.debug("enableApp", app.name, enable);
 
-    if (app.pid) {
-        logger.debug("process.kill", app.pid);
+    if(enable) {
+        if(app.status == AppStatus.Disabled) {
+            app.status = AppStatus.None;
+            app.pid = null;
 
-        process.kill(app.pid);
+            startApp(app);
+        }
     }
-
-    app.status = AppStatus.Disabled;
+    else {
+        stopApp(app);
+        
+        app.status = AppStatus.Disabled;
+    }
 }
 
 function findWorkspace(name: string): WorkspaceRuntime {
@@ -248,16 +284,7 @@ function findAppByName(workspace: WorkspaceRuntime, appName: string): AppRuntime
 function getAppByName(work: WorkspaceRuntime, name: string): AppRuntime {
     const app = findAppByName(work, name);
     if(!app) {
-        throw new Error("App with name " + name + " was not found");
-    }
-
-    return app;
-}
-
-function getWorkspace(name: string): WorkspaceRuntime {
-    const app = findWorkspace(name);
-    if(!app) {
-        throw new Error("Workspace with name " + name + " was not found");
+        throw new DMError("App with name " + name + " was not found");
     }
 
     return app;
@@ -280,7 +307,7 @@ const pickColor = (function() {
 
 async function loadWorkspace(cwd: string): Promise<WorkspaceRuntime> {
     const config = await loadConfigFrom(cwd);
-    let work = findWorkspace(config.name);
+    let work = findWorkspace(config.name || cwd);
     if(!work) {
         work = {
             name: config.name,
@@ -346,6 +373,7 @@ export function startApp(app: AppRuntime) {
 
     try {
         const cwd = getAppWorkingDirectory(app.workspace.config, app.config);
+        const now = new Date();
 
         const proc = spawn("node", [app.config.main, ...app.config.args], {
                 cwd,
@@ -356,6 +384,7 @@ export function startApp(app: AppRuntime) {
         app.proc = proc;
         app.pid = proc.pid;
         app.status = AppStatus.Running;
+        app.ping = now;
 
         proc.on("close", function () {
             if (app.status != AppStatus.Stopped && app.status != AppStatus.Disabled) {
@@ -380,6 +409,58 @@ export function startApp(app: AppRuntime) {
         app.error = err.message;
         app.status = AppStatus.Killed;
         app.proc = null;
+    }
+}
+
+function resolveNames(work: WorkspaceRuntime, names: string[]): string[] {
+    const res = new Set<string>();
+
+    for(const name of names) {
+        if(name == "all") {
+            for(const app of work.apps) {
+                res.add(app.name);
+            }
+
+            continue;
+        }
+
+        const app = getAppByName(work, name);
+        res.add(app.name);
+    }
+
+    if(!res.size) {
+        throw new DMError("App name is missing");
+    }
+
+    return Array.from(res.keys());
+}
+
+function startCheckAlive() {
+    setTimeout(function() {
+        try {
+            checkAlive();
+        }
+        finally {
+            startCheckAlive();
+        }
+    }, 1000);
+}
+
+function checkAlive() {
+    logger.debug("checkAlive");
+
+    const now = new Date();
+
+    for(const [workspaceName, work] of workspaces) {
+        for(const app of work.apps) {
+            if(app.status != AppStatus.Running) {
+                continue;
+            }
+
+            if(now.valueOf() - app.ping.valueOf() > 5000) {
+                app.status = AppStatus.Dead;
+            }
+        }
     }
 }
 

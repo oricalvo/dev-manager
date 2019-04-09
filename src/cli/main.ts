@@ -3,9 +3,9 @@
 import {createConsoleLogger, createLogger, LOGGER} from "../common/logger";
 import {AppDTO, AppStatus} from "../common/dtos";
 import {BuildProxy} from "../common/proxy";
-import {replaceAll, restartApps, runApps, startApps, stopApps} from "../common/common";
+import {enableApps, replaceAll, restartApps, runApps, startApps, stopApps} from "../common/common";
 import {loadConfigFrom} from "../common/config";
-import {DMError} from "../common/errors";
+import {DMError, ErrorCode} from "../common/errors";
 import {spawn} from "child_process";
 import * as path from "path";
 import {delay, waitForEvent} from "../common/promise.helpers";
@@ -41,7 +41,10 @@ export async function main() {
             await stop(args);
         }
         else if (cmd == "disable") {
-            await disable(args);
+            await enable(args, false);
+        }
+        else if (cmd == "enable") {
+            await enable(args, true);
         }
         else if (cmd == "build") {
             await build();
@@ -56,7 +59,7 @@ export async function main() {
             await log(args);
         }
         else {
-            throw new Error("Unexpected command " + cmd);
+            throw new DMError("Unexpected command " + cmd);
         }
     }
     catch(err) {
@@ -75,36 +78,43 @@ export async function main() {
     }
 }
 
-async function start(args) {
-    const appName = args[0];
+async function start(names) {
+    validateNames(names);
 
     const config = await loadConfigFrom(process.cwd());
-    const names = appName ? [appName] : undefined;
 
     await startApps(config, names);
     await list();
 }
 
 async function run(names) {
+    validateNames(names);
+
     const config = await loadConfigFrom(process.cwd());
     await runApps(config, names);
 }
 
 async function restart(names) {
+    validateNames(names);
+
     const config = await loadConfigFrom(process.cwd());
     await restartApps(config, names);
     await list();
 }
 
 async function stop(names) {
+    validateNames(names);
+
     const config = await loadConfigFrom(process.cwd());
     await stopApps(config, names);
     await list();
 }
 
-async function disable(names) {
+async function enable(names, enable: boolean) {
+    validateNames(names);
+
     const config = await loadConfigFrom(process.cwd());
-    await stopApps(config, names);
+    await enableApps(config, names, enable);
     await list();
 }
 
@@ -127,7 +137,7 @@ async function build() {
         logger.debug(stats.errors + " errors, " + stats.files + " files, exit code " + stats.exitCode);
         logger.debug("Done in " + (now.valueOf() - before.valueOf()) / 1000 + " seconds");
 
-        if(!stats.errors && stats.files) {
+        if(!stats.errors && stats.files && config.apps && config.apps.length) {
             logger.debug("Restarting apps ... ");
             await restart([]);
         }
@@ -374,6 +384,12 @@ function handleOutput(stats: CompileStats, data) {
     }
 
     console.log(line);
+}
+
+function validateNames(names: string) {
+    if(!names.length) {
+        throw new DMError("App name is missing");
+    }
 }
 
 interface CompileStats {

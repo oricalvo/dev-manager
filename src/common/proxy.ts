@@ -1,6 +1,18 @@
 import {createLogger} from "./logger";
-import {AppRuntime, AppDTO, PingDTO, WorkspaceConfig, StartDTO, StopDTO, ListDTO, ExitDTO, GetAppDTO} from "./dtos";
+import {
+    AppRuntime,
+    AppDTO,
+    PingDTO,
+    WorkspaceConfig,
+    StartDTO,
+    StopDTO,
+    ListDTO,
+    ExitDTO,
+    GetAppDTO,
+    EnableDTO, ErrorDTO
+} from "./dtos";
 import {httpRequest, HttpRequestOptions} from "oc-tools/http";
+import {DMError} from "./errors";
 
 const logger = createLogger("BuildProxy");
 logger.disable();
@@ -113,6 +125,22 @@ export class BuildProxy {
         });
     }
 
+    async enable(names: string[], enable: boolean) {
+        logger.debug("enable", names, enable);
+
+        const url = "/enable";
+        const body: EnableDTO = {
+            cwd: process.cwd(),
+            names,
+            enable,
+        }
+        return await sendHttpRequest<void>({
+            method: "POST",
+            url,
+            data: body
+        });
+    }
+
     async restart(names: string[]) {
         logger.debug("restart", names);
 
@@ -161,8 +189,20 @@ export class BuildProxy {
 async function sendHttpRequest<T>(options: HttpRequestOptions): Promise<T> {
     logger.debug("sendHttpRequest", options);
 
-    return await httpRequest({
-        ...options,
-        url: BASE_URL + options.url,
-    });
+    try {
+        return await httpRequest({
+            ...options,
+            url: BASE_URL + options.url,
+        });
+    }
+    catch(err) {
+        if(typeof err.body == "object") {
+            if(err.body.errorCode) {
+                const dto: ErrorDTO = err.body;
+                throw DMError.fromDTO(err);
+            }
+        }
+
+        throw err;
+    }
 }

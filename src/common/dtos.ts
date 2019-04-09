@@ -1,4 +1,5 @@
 import {ChildProcess} from "child_process";
+import {ErrorCode} from "./errors";
 
 export interface WorkspaceConfig {
     name: string;
@@ -37,6 +38,7 @@ export interface AppRuntime {
     error?: string;
     port?: number;
     ping: Date;
+    stopped?: Date;
     color: (str: string) => string;
     pid: number;
     workspace: WorkspaceRuntime;
@@ -51,6 +53,7 @@ export enum AppStatus {
     Closed,
     Unknown,
     Disabled,
+    Dead,
 }
 
 export interface KillApps {
@@ -99,9 +102,10 @@ export interface StopDTO {
     names: string[];
 }
 
-export interface DisableDTO {
+export interface EnableDTO {
     cwd: string;
     names: string[];
+    enable: boolean;
 }
 
 export interface ListDTO{
@@ -110,4 +114,9 @@ export interface ListDTO{
 
 export interface GetAppDTO{
     cwd: string;
+}
+
+export interface ErrorDTO {
+    message: string;
+    errorCode: ErrorCode;
 }

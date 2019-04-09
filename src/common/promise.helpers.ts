@@ -1,22 +1,3 @@
-// export function promisify(this: any, func: any): any {
-//     return (...args: any[]) => {
-//         const that = this;
-//
-//         return new Promise(function(resolve, reject){
-//             args.push(function(err: any, res: any){
-//                 if(err){
-//                     reject(err);
-//                     return;
-//                 }
-//
-//                 resolve(res);
-//             });
-//
-//             func.apply(that, args);
-//         });
-//     }
-// }
-
 import {promisify} from "util";
 import EventEmitter = NodeJS.EventEmitter;
 

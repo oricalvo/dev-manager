@@ -18,6 +18,11 @@ export async function stopApps(config: WorkspaceConfig, names: string[]) {
     await proxy.stop(names);
 }
 
+export async function enableApps(config: WorkspaceConfig, names: string[], enable: boolean) {
+    const proxy = new BuildProxy(config);
+    await proxy.enable(names, enable);
+}
+
 export function runApps(config: WorkspaceConfig, names: string[]) {
     for(const name of names) {
         const app = getAppConfig(config, name);

@@ -1,6 +1,8 @@
 import * as path from "path";
 import {ExecutionContext} from "../common/executionContext";
 import {createLogger} from "../common/logger";
+import {DMError, ErrorCode} from "../common/errors";
+import {ErrorDTO} from "../common/dtos";
 
 const logger = createLogger("express.helpers");
 
@@ -55,17 +57,17 @@ export function promisifyExpressApi(func) {
 
 export function registerErrorHandler(appOrRouter) {
     appOrRouter.use(function(err, req, res, next) {
-        console.error(err);
-
         logger.error(err);
 
-        const message = err.message || "Internal server error";
+        const dto: ErrorDTO = {
+            message: err.message || "Internal server error",
+            errorCode: err.errorCode || ErrorCode.InternalServerError,
+        }
+
         const statusCode = err.statusCode || 500;
 
         res.status(statusCode);
-        res.status_message = message;
-        res.send({
-            message,
-        });
+        res.status_message = dto.message;
+        res.send(dto);
     });
 }
