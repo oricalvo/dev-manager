@@ -1,18 +1,28 @@
 #!/usr/bin/env node
 
 import {createConsoleLogger, createLogger, LOGGER} from "../common/logger";
-import {AppDTO, AppStatus} from "../common/dtos";
+import {AppConfig, AppDTO, AppStatus, BuildConfig, ProjectConfig, WorkspaceConfig} from "../common/dtos";
 import {BuildProxy} from "../common/proxy";
-import {enableApps, replaceAll, restartApps, runApps, startApps, stopApps} from "../common/common";
+import {
+    enableApps,
+    getBuildConfig,
+    replaceAll,
+    resolveBuildNames,
+    restartApps,
+    runApps,
+    startApps,
+    stopApps
+} from "../common/common";
 import {loadConfigFrom} from "../common/config";
-import {DMError, ErrorCode} from "../common/errors";
+import {DMError} from "../common/errors";
 import {spawn} from "child_process";
 import * as path from "path";
-import {delay, waitForEvent} from "../common/promise.helpers";
+import {delay} from "../common/promise.helpers";
 import {registerService} from "oc-tools/serviceLocator";
 import {fileExists, readJSONFile} from "oc-tools/fs";
 import {using} from "../common/object.helpers";
 import {LineReader} from "../common/lineReader";
+import {ExecutionContext} from "../common/executionContext";
 
 const logger = createLogger();
 
@@ -32,7 +42,7 @@ export async function main() {
             await run(args);
         }
         else if (cmd == "restart") {
-            await restart(args);
+            await restart(args, true);
         }
         else if (cmd == "list") {
             await list();
@@ -47,7 +57,7 @@ export async function main() {
             await enable(args, true);
         }
         else if (cmd == "build") {
-            await build();
+            await build(args);
         }
         else if (cmd == "server") {
             await server(args);
@@ -94,12 +104,14 @@ async function run(names) {
     await runApps(config, names);
 }
 
-async function restart(names) {
+async function restart(names, showList: boolean) {
     validateNames(names);
 
     const config = await loadConfigFrom(process.cwd());
     await restartApps(config, names);
-    await list();
+    if(showList) {
+        await list();
+    }
 }
 
 async function stop(names) {
@@ -118,41 +130,99 @@ async function enable(names, enable: boolean) {
     await list();
 }
 
-async function build() {
-    const config = await loadConfigFrom(process.cwd());
-    const {build} = config;
-    if(!build) {
-        throw new Error("No build configuration");
-    }
+async function buildProjectOrApp(work: WorkspaceConfig, projectOrApp: ProjectConfig|AppConfig): Promise<CompileStats> {
+    const {build} = projectOrApp;
+    logger.debug("Compiling typescript at " + build.tsconfig);
+    const stats = await compileTsc(projectOrApp.path, build.tsconfig);
 
-    if(build.tsconfig) {
-        const tsconfigFilePath = path.resolve(config.basePath, build.tsconfig);
+    logger.debug(stats.errors + " errors, " + stats.files + " files, exit code " + stats.exitCode);
 
-        const before = new Date();
-
-        logger.debug("Compiling typescript at " + tsconfigFilePath);
-        const stats = await compileTsc(tsconfigFilePath);
-        const now = new Date();
-
-        logger.debug(stats.errors + " errors, " + stats.files + " files, exit code " + stats.exitCode);
-        logger.debug("Done in " + (now.valueOf() - before.valueOf()) / 1000 + " seconds");
-
-        if(!stats.errors && stats.files && config.apps && config.apps.length) {
-            logger.debug("Restarting apps ... ");
-            await restart([]);
+    if(!stats.errors && stats.files) {
+        if(projectOrApp.type == "project") {
+            if(projectOrApp.apps.length) {
+                const names = projectOrApp.apps.map(a => a.name);
+                logger.debug("Restarting apps " + names.join(","));
+                await restart(names, false);
+            }
+        }
+        else {
+            logger.debug("Restarting app " + projectOrApp.name);
+            await restart([projectOrApp.name], false);
         }
     }
-    else {
-        logger.debug("Running build command:", build.command, "at", path.resolve(config.basePath, build.cwd));
 
-        const proc = spawn(build.command, build.args, {
-            stdio: "inherit",
-            shell: true,
-            cwd: path.resolve(config.basePath, build.cwd),
+    return stats;
+}
+
+async function build(names) {
+    const work = await loadConfigFrom(process.cwd());
+
+    validateNames(names);
+
+    const projectsOrApps = resolveBuildNames(work, names);
+
+    const allStats: CompileStats = {
+        errors: 0,
+        files: 0,
+        exitCode: undefined,
+    };
+
+    const actions = projectsOrApps.map(projectOrApp => async () => {
+        await ExecutionContext.run(async ()=> {
+            const stats: CompileStats = await buildProjectOrApp(work, projectOrApp);
+            allStats.errors += stats.errors;
+            allStats.files += stats.files;
         });
+    });
 
-        await waitForEvent(proc, "close", true);
-    }
+    const before = new Date();
+
+    await Promise.all(actions.map(a => a()));
+
+    const now = new Date();
+    logger.debug("Done in " + (now.valueOf() - before.valueOf()) / 1000 + " seconds");
+    logger.debug(allStats.errors + " errors, " + allStats.files + " files");
+
+    // const {build} = config;
+    //
+    // const actions = [];
+    //
+    // if(build) {
+    //     actions.push(()=>runBuild(build));
+    // }
+    //
+    // if(!build) {
+    //     throw new Error("No build configuration");
+    // }
+    //
+    // if(build.tsconfig) {
+    //     const tsconfigFilePath = path.resolve(config.basePath, build.tsconfig);
+    //
+    //     const before = new Date();
+    //
+    //     logger.debug("Compiling typescript at " + tsconfigFilePath);
+    //     const stats = await compileTsc(tsconfigFilePath);
+    //     const now = new Date();
+    //
+    //     logger.debug(stats.errors + " errors, " + stats.files + " files, exit code " + stats.exitCode);
+    //     logger.debug("Done in " + (now.valueOf() - before.valueOf()) / 1000 + " seconds");
+    //
+    //     if(!stats.errors && stats.files && config.apps && config.apps.length) {
+    //         logger.debug("Restarting apps ... ");
+    //         await restart(["all"], false);
+    //     }
+    // }
+    // else {
+    //     logger.debug("Running build command:", build.command, "at", path.resolve(config.basePath, build.cwd));
+    //
+    //     const proc = spawn(build.command, build.args, {
+    //         stdio: "inherit",
+    //         shell: true,
+    //         cwd: path.resolve(config.basePath, build.cwd),
+    //     });
+    //
+    //     await waitForEvent(proc, "close", true);
+    // }
 }
 
 async function server(args: string[]) {
@@ -298,7 +368,7 @@ async function list() {
 }
 
 
-function compileTsc(tsconfigPath: string): Promise<CompileStats> {
+function compileTsc(basePath: string, tsconfigPath: string): Promise<CompileStats> {
     return new Promise(async (resolve, reject)=> {
         const stats: CompileStats = {
             files: 0,
@@ -307,7 +377,7 @@ function compileTsc(tsconfigPath: string): Promise<CompileStats> {
         };
 
         try {
-            const tsc = path.resolve("node_modules/.bin/tsc");
+            const tsc = path.resolve(basePath, "node_modules/.bin/tsc");
             if (!await fileExists(tsc)) {
                 throw new Error("tsc was not found at: " + tsc);
             }

@@ -4,23 +4,33 @@ import {ErrorCode} from "./errors";
 export interface WorkspaceConfig {
     name: string;
     build: BuildConfig;
-    apps: AppConfig[];
-    basePath: string;
+    projects: ProjectConfig[];
+    path: string;
 }
 
-export interface BuildConfig {
-    command: string;
-    args: string[];
-    cwd: string;
-    tsconfig: string;
+export interface ProjectConfig {
+    type: "project";
+    name: string;
+    build: BuildConfig;
+    apps: AppConfig[];
+    path: string;
 }
 
 export interface AppConfig {
+    type: "app";
     name: string;
     main: string;
-    cwd: string;
     args: string[];
     log: string;
+    build: BuildConfig;
+    path: string;
+    cwd: string;
+}
+
+export interface BuildConfig {
+    name: string;
+    path: string;
+    tsconfig: string;
 }
 
 export interface WorkspaceRuntime {

@@ -21,7 +21,7 @@ import {Mapper_AppRuntime_AppDTO} from "./mappers";
 import {loadConfigFrom} from "../common/config";
 import * as colors from "colors";
 import {delay} from "../common/promise.helpers";
-import {getAppConfig, getAppWorkingDirectory} from "../common/common";
+import {getAppConfig, getAppWorkingDirectory, resolveAppNames} from "../common/common";
 import * as http from "http";
 import {parseQueryParams} from "oc-tools/http";
 import {DMError} from "../common/errors";
@@ -85,7 +85,7 @@ async function start(req): Promise<AppDTO[]> {
     const body: StartDTO = req.body;
 
     const work = await loadWorkspace(body.cwd);
-    const names =  resolveNames(work, body.names);
+    const names = resolveAppNames(work.config, body.names);
 
     startApps(work, names);
 
@@ -142,7 +142,7 @@ async function restart(req) {
     }
 
     const work = await loadWorkspace(body.cwd);
-    const names =  resolveNames(work, body.names);
+    const names = resolveAppNames(work.config, body.names);
 
     stopApps(work, names);
     await delay(100);
@@ -193,7 +193,7 @@ async function stop(req) {
     const body: StopDTO = req.body;
 
     const work = await loadWorkspace(body.cwd);
-    const names = resolveNames(work, body.names);
+    const names = resolveAppNames(work.config, body.names);
 
     stopApps(work, names);
 }
@@ -204,7 +204,7 @@ async function enable(req) {
     const body: EnableDTO = req.body;
 
     const work = await loadWorkspace(body.cwd);
-    const names = resolveNames(work, body.names);
+    const names = resolveAppNames(work.config, body.names);
 
     enableApps(work, names, body.enable);
 }
@@ -262,7 +262,7 @@ async function enableApp(app: AppRuntime, enable: boolean) {
     }
     else {
         stopApp(app);
-        
+
         app.status = AppStatus.Disabled;
     }
 }
@@ -315,9 +315,11 @@ async function loadWorkspace(cwd: string): Promise<WorkspaceRuntime> {
             apps: [],
         }
 
-        for(const appConfig of config.apps) {
-            const app = createAppRuntime(work, appConfig);
-            work.apps.push(app);
+        for(const project of config.projects) {
+            for (const appConfig of project.apps) {
+                const app = createAppRuntime(work, appConfig);
+                work.apps.push(app);
+            }
         }
 
         workspaces.set(config.name, work);
@@ -410,29 +412,6 @@ export function startApp(app: AppRuntime) {
         app.status = AppStatus.Killed;
         app.proc = null;
     }
-}
-
-function resolveNames(work: WorkspaceRuntime, names: string[]): string[] {
-    const res = new Set<string>();
-
-    for(const name of names) {
-        if(name == "all") {
-            for(const app of work.apps) {
-                res.add(app.name);
-            }
-
-            continue;
-        }
-
-        const app = getAppByName(work, name);
-        res.add(app.name);
-    }
-
-    if(!res.size) {
-        throw new DMError("App name is missing");
-    }
-
-    return Array.from(res.keys());
 }
 
 function startCheckAlive() {

@@ -1,7 +1,7 @@
 import * as path from "path";
 import {fileExists, readJSONFile} from "oc-tools/fs";
 import {createLogger} from "./logger";
-import {WorkspaceConfig} from "./dtos";
+import {BuildConfig, WorkspaceConfig} from "./dtos";
 
 const logger = createLogger();
 
@@ -20,23 +20,54 @@ export async function loadConfigFrom(dir: string): Promise<WorkspaceConfig> {
         }
 
         logger.debug("Loading configuration from " + filePath);
-        const config: WorkspaceConfig = await readJSONFile(filePath);
-        config.basePath = dir;
+        const work: WorkspaceConfig = await readJSONFile(filePath);
+        work.path = dir;
+        work.projects = work.projects || [];
 
-        if(config.apps) {
-            for (const app of config.apps) {
-                if (!app.cwd) {
-                    app.cwd = config.basePath;
+        for(const project of work.projects) {
+            project.type = "project";
+
+            if(!project.path && project.name) {
+                project.path = "./" + project.name;
+            }
+
+            if(!project.path) {
+                project.path = ".";
+            }
+
+            project.path = path.resolve(work.path, project.path);
+            fixBuild(project.path, project.build);
+            project.apps = project.apps || [];
+
+            for(const app of project.apps) {
+                if(!app.name) {
+                    throw new Error("app.name is missing");
                 }
 
+                app.type = "app";
+
+                if(!app.path && app.name) {
+                    app.path = "./" + app.name;
+                }
+
+                if(!app.path) {
+                    app.path = ".";
+                }
+
+                app.path = path.resolve(project.path, app.path);
+                fixBuild(app.path, app.build);
                 app.args = app.args || [];
             }
         }
-        else {
-            config.apps = [];
-        }
 
-        return config;
+        return work;
     }
 }
 
+function fixBuild(base: string, build: BuildConfig) {
+    if(!build) {
+        return;
+    }
+
+    build.tsconfig = path.resolve(base, build.tsconfig);
+}
