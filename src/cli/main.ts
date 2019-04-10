@@ -136,7 +136,7 @@ async function enable(names, enable: boolean) {
 async function buildProjectOrApp(work: WorkspaceConfig, projectOrApp: ProjectConfig|AppConfig): Promise<CompileStats> {
     const {build} = projectOrApp;
     logger.debug("Compiling typescript at " + build.tsconfig);
-    const stats = await compileTsc(projectOrApp.path, build.tsconfig);
+    const stats = await compileTsc(build);
 
     // logger.debug(stats.errors + " errors, " + stats.files + " files, exit code " + stats.exitCode);
 
@@ -377,7 +377,7 @@ async function list() {
 }
 
 
-function compileTsc(basePath: string, tsconfigPath: string): Promise<CompileStats> {
+function compileTsc(build: BuildConfig): Promise<CompileStats> {
     return new Promise(async (resolve, reject)=> {
         const stats: CompileStats = {
             files: 0,
@@ -386,14 +386,11 @@ function compileTsc(basePath: string, tsconfigPath: string): Promise<CompileStat
         };
 
         try {
-            const tsc = path.resolve(basePath, "node_modules/.bin/tsc");
-            if (!await fileExists(tsc)) {
-                throw new Error("tsc was not found at: " + tsc);
+            if (!await fileExists(build.tsc)) {
+                throw new Error("tsc was not found at: " + build.tsc);
             }
 
-            console.log("tsc", tsc);
-
-            const proc = spawn(tsc, ["-b", tsconfigPath ,"-listEmittedFiles"], {
+            const proc = spawn(build.tsc, ["-b", build.tsconfig ,"-listEmittedFiles"], {
                 shell: true,
             });
 

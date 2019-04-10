@@ -73,8 +73,6 @@ export async function loadConfigFrom(dir: string): Promise<WorkspaceConfig> {
             }
         }
 
-        console.log(JSON.stringify(work, undefined, 2));
-
         return work;
     }
 }
@@ -84,5 +82,15 @@ function fixBuild(base: string, build: BuildConfig) {
         return;
     }
 
+    if(!build.tsconfig) {
+        build.tsconfig = "./tsconfig.json";
+    }
+
     build.tsconfig = path.resolve(base, build.tsconfig);
+
+    if(!build.tsc) {
+        build.tsc = "./node_modules/.bin/tsc";
+    }
+
+    build.tsc = path.resolve(base, build.tsc);
 }

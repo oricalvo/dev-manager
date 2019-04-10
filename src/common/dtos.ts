@@ -33,6 +33,7 @@ export interface BuildConfig {
     name: string;
     path: string;
     tsconfig: string;
+    tsc: string;
 }
 
 export interface WorkspaceRuntime {
