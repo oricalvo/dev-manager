@@ -55,10 +55,25 @@ export async function loadConfigFrom(dir: string): Promise<WorkspaceConfig> {
                 }
 
                 app.path = path.resolve(project.path, app.path);
+
+                if(app.main) {
+                    app.main = path.resolve(app.path, app.main);
+
+                    if(!app.cwd) {
+                        app.cwd = path.dirname(app.main);
+                    }
+                }
+
+                if(app.log) {
+                    app.log = path.resolve(app.path, app.log);
+                }
+
                 fixBuild(app.path, app.build);
                 app.args = app.args || [];
             }
         }
+
+        console.log(JSON.stringify(work, undefined, 2));
 
         return work;
     }

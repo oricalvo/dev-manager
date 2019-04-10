@@ -68,6 +68,9 @@ export async function main() {
         else if (cmd == "log") {
             await log(args);
         }
+        else if (cmd == "config") {
+            await config(args);
+        }
         else {
             throw new DMError("Unexpected command " + cmd);
         }
@@ -135,7 +138,7 @@ async function buildProjectOrApp(work: WorkspaceConfig, projectOrApp: ProjectCon
     logger.debug("Compiling typescript at " + build.tsconfig);
     const stats = await compileTsc(projectOrApp.path, build.tsconfig);
 
-    logger.debug(stats.errors + " errors, " + stats.files + " files, exit code " + stats.exitCode);
+    // logger.debug(stats.errors + " errors, " + stats.files + " files, exit code " + stats.exitCode);
 
     if(!stats.errors && stats.files) {
         if(projectOrApp.type == "project") {
@@ -180,8 +183,8 @@ async function build(names) {
     await Promise.all(actions.map(a => a()));
 
     const now = new Date();
-    logger.debug("Done in " + (now.valueOf() - before.valueOf()) / 1000 + " seconds");
     logger.debug(allStats.errors + " errors, " + allStats.files + " files");
+    logger.debug("Done in " + (now.valueOf() - before.valueOf()) / 1000 + " seconds");
 
     // const {build} = config;
     //
@@ -304,6 +307,12 @@ async function log(args: string[]) {
     });
 }
 
+async function config(args: string[]) {
+    const config = await loadConfigFrom(process.cwd());
+
+    console.log(JSON.stringify(config, undefined, 2));
+}
+
 async function serverStart() {
     try {
         await BuildProxy.alive();
@@ -381,6 +390,8 @@ function compileTsc(basePath: string, tsconfigPath: string): Promise<CompileStat
             if (!await fileExists(tsc)) {
                 throw new Error("tsc was not found at: " + tsc);
             }
+
+            console.log("tsc", tsc);
 
             const proc = spawn(tsc, ["-b", tsconfigPath ,"-listEmittedFiles"], {
                 shell: true,

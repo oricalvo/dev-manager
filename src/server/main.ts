@@ -21,7 +21,7 @@ import {Mapper_AppRuntime_AppDTO} from "./mappers";
 import {loadConfigFrom} from "../common/config";
 import * as colors from "colors";
 import {delay} from "../common/promise.helpers";
-import {getAppConfig, getAppWorkingDirectory, resolveAppNames} from "../common/common";
+import {getAppConfig, resolveAppNames} from "../common/common";
 import * as http from "http";
 import {parseQueryParams} from "oc-tools/http";
 import {DMError} from "../common/errors";
@@ -374,11 +374,10 @@ export function startApp(app: AppRuntime) {
     }
 
     try {
-        const cwd = getAppWorkingDirectory(app.workspace.config, app.config);
         const now = new Date();
 
         const proc = spawn("node", [app.config.main, ...app.config.args], {
-                cwd,
+                cwd: app.config.cwd,
                 detached: true,
                 stdio: "ignore",
             });

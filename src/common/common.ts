@@ -28,24 +28,11 @@ export function runApps(config: WorkspaceConfig, names: string[]) {
     for(const name of names) {
         const app = getAppConfig(config, name);
 
-        const cwd = getAppWorkingDirectory(config, app);
-
         const proc = spawn("node", [app.main, ...app.args], {
-            cwd,
+            cwd: app.cwd,
             stdio: "inherit",
         });
     }
-}
-
-export function getAppWorkingDirectory(worksapce: WorkspaceConfig, app: AppConfig) {
-    let cwd = app.cwd;
-
-    if(!cwd) {
-        cwd = path.dirname(app.main);
-    }
-
-    const res = path.resolve(worksapce.path, app.path, app.cwd);
-    return res;
 }
 
 export function getAppConfig(workspace: WorkspaceConfig, appName: string): AppConfig {
@@ -76,7 +63,7 @@ export function getBuildConfig(workspace: WorkspaceConfig, name: string): Projec
 
 function findProjectConfig(work: WorkspaceConfig, name: string): ProjectConfig {
     for(const project of work.projects) {
-        if(project.name && project.name.toLowerCase() == name.toLowerCase()) {
+        if(!project.disabled && project.name && project.name.toLowerCase() == name.toLowerCase()) {
             return project;
         }
     }
@@ -87,7 +74,7 @@ function findProjectConfig(work: WorkspaceConfig, name: string): ProjectConfig {
 function findAppConfig(work: WorkspaceConfig, name: string): AppConfig {
     for(const project of work.projects) {
         for(const app of project.apps) {
-            if(app.name.toLowerCase() == name.toLowerCase() && app.build) {
+            if(!app.disabled && app.name.toLowerCase() == name.toLowerCase()) {
                 return app;
             }
         }
@@ -134,12 +121,12 @@ export function resolveBuildNames(work: WorkspaceConfig, names: string[]): (AppC
     for(const name of names) {
         if(name == "all") {
             for(const project of work.projects) {
-                if(project.build) {
+                if(project.build && !project.disabled) {
                     res.add(project);
                 }
 
                 for (const app of project.apps) {
-                    if(app.build) {
+                    if(app.build && !app.disabled) {
                         res.add(app);
                     }
                 }

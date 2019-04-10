@@ -1,6 +1,6 @@
 {
   "name": "dev-manager",
-  "version": "1.0.59",
+  "version": "1.0.61",
   "main": "index.js",
   "license": "MIT",
   "bin": {

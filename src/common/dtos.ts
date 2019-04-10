@@ -14,6 +14,7 @@ export interface ProjectConfig {
     build: BuildConfig;
     apps: AppConfig[];
     path: string;
+    disabled: boolean;
 }
 
 export interface AppConfig {
@@ -25,6 +26,7 @@ export interface AppConfig {
     build: BuildConfig;
     path: string;
     cwd: string;
+    disabled: boolean;
 }
 
 export interface BuildConfig {
