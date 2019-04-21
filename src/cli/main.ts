@@ -133,12 +133,10 @@ async function enable(names, enable: boolean) {
     await list();
 }
 
-async function buildProjectOrApp(work: WorkspaceConfig, projectOrApp: ProjectConfig|AppConfig): Promise<CompileStats> {
+async function buildProjectOrApp(work: WorkspaceConfig, projectOrApp: ProjectConfig|AppConfig, force: boolean): Promise<CompileStats> {
     const {build} = projectOrApp;
     logger.debug("Compiling typescript at " + build.tsconfig);
-    const stats = await compileTsc(build);
-
-    // logger.debug(stats.errors + " errors, " + stats.files + " files, exit code " + stats.exitCode);
+    const stats = await compileTsc(build, force);
 
     if(!stats.errors && stats.files) {
         if(projectOrApp.type == "project") {
@@ -157,10 +155,13 @@ async function buildProjectOrApp(work: WorkspaceConfig, projectOrApp: ProjectCon
     return stats;
 }
 
-async function build(names) {
+async function build(args: string[]) {
     const work = await loadConfigFrom(process.cwd());
 
+    const names = args.filter(a => !a.startsWith("--"));
     validateNames(names);
+
+    const force = args.some(a => a == "--force");
 
     const projectsOrApps = resolveBuildNames(work, names);
 
@@ -172,7 +173,7 @@ async function build(names) {
 
     const actions = projectsOrApps.map(projectOrApp => async () => {
         await ExecutionContext.run(async ()=> {
-            const stats: CompileStats = await buildProjectOrApp(work, projectOrApp);
+            const stats: CompileStats = await buildProjectOrApp(work, projectOrApp, force);
             allStats.errors += stats.errors;
             allStats.files += stats.files;
         });
@@ -185,47 +186,6 @@ async function build(names) {
     const now = new Date();
     logger.debug(allStats.errors + " errors, " + allStats.files + " files");
     logger.debug("Done in " + (now.valueOf() - before.valueOf()) / 1000 + " seconds");
-
-    // const {build} = config;
-    //
-    // const actions = [];
-    //
-    // if(build) {
-    //     actions.push(()=>runBuild(build));
-    // }
-    //
-    // if(!build) {
-    //     throw new Error("No build configuration");
-    // }
-    //
-    // if(build.tsconfig) {
-    //     const tsconfigFilePath = path.resolve(config.basePath, build.tsconfig);
-    //
-    //     const before = new Date();
-    //
-    //     logger.debug("Compiling typescript at " + tsconfigFilePath);
-    //     const stats = await compileTsc(tsconfigFilePath);
-    //     const now = new Date();
-    //
-    //     logger.debug(stats.errors + " errors, " + stats.files + " files, exit code " + stats.exitCode);
-    //     logger.debug("Done in " + (now.valueOf() - before.valueOf()) / 1000 + " seconds");
-    //
-    //     if(!stats.errors && stats.files && config.apps && config.apps.length) {
-    //         logger.debug("Restarting apps ... ");
-    //         await restart(["all"], false);
-    //     }
-    // }
-    // else {
-    //     logger.debug("Running build command:", build.command, "at", path.resolve(config.basePath, build.cwd));
-    //
-    //     const proc = spawn(build.command, build.args, {
-    //         stdio: "inherit",
-    //         shell: true,
-    //         cwd: path.resolve(config.basePath, build.cwd),
-    //     });
-    //
-    //     await waitForEvent(proc, "close", true);
-    // }
 }
 
 async function server(args: string[]) {
@@ -377,7 +337,7 @@ async function list() {
 }
 
 
-function compileTsc(build: BuildConfig): Promise<CompileStats> {
+function compileTsc(build: BuildConfig, force: boolean): Promise<CompileStats> {
     return new Promise(async (resolve, reject)=> {
         const stats: CompileStats = {
             files: 0,
@@ -390,7 +350,13 @@ function compileTsc(build: BuildConfig): Promise<CompileStats> {
                 throw new Error("tsc was not found at: " + build.tsc);
             }
 
-            const proc = spawn(build.tsc, ["-b", build.tsconfig ,"-listEmittedFiles"], {
+            const args = ["-b", build.tsconfig ,"-listEmittedFiles"];
+
+            if(force) {
+                args.push("-f");
+            }
+
+            const proc = spawn(build.tsc, args, {
                 shell: true,
             });
 
@@ -464,7 +430,7 @@ function handleOutput(stats: CompileStats, data) {
     console.log(line);
 }
 
-function validateNames(names: string) {
+function validateNames(names: string[]) {
     if(!names.length) {
         throw new DMError("App name is missing");
     }
