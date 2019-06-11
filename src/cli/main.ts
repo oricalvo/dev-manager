@@ -3,16 +3,7 @@
 import {createConsoleLogger, createLogger, LOGGER} from "../common/logger";
 import {AppConfig, AppDTO, AppStatus, BuildConfig, ProjectConfig, WorkspaceConfig} from "../common/dtos";
 import {BuildProxy} from "../common/proxy";
-import {
-    enableApps,
-    getBuildConfig,
-    replaceAll,
-    resolveBuildNames,
-    restartApps,
-    runApps,
-    startApps,
-    stopApps
-} from "../common/common";
+import {enableApps, replaceAll, resolveBuildNames, restartApps, runApps, startApps, stopApps} from "../common/common";
 import {loadConfigFrom} from "../common/config";
 import {DMError} from "../common/errors";
 import {spawn} from "child_process";
@@ -23,6 +14,8 @@ import {fileExists, readJSONFile} from "oc-tools/fs";
 import {using} from "../common/object.helpers";
 import {LineReader} from "../common/lineReader";
 import {ExecutionContext} from "../common/executionContext";
+import {TsProject, TsWorkspace} from "../common/tsConfigReader";
+import {TsConfigReader} from "../common/tsConfigReader";
 
 const logger = createLogger();
 
@@ -161,9 +154,25 @@ async function build(args: string[]) {
     const names = args.filter(a => !a.startsWith("--"));
     validateNames(names);
 
+    const clean = args.some(a => a == "--clean");
     const force = args.some(a => a == "--force");
+    const plan = args.some(a => a == "--plan");
 
     const projectsOrApps = resolveBuildNames(work, names);
+
+    if(plan) {
+        const tsconfigs = projectsOrApps.filter(p => !!p.build).map(p => p.build.tsconfig);
+
+        console.log(tsconfigs);
+
+        // const reader = new TsConfigReader();
+        // const workspace: TsWorkspace = await reader.read(tsconfigs);
+        // workspace.walk(async project => {
+        //     logger.debug(project.filePath);
+        // })
+
+        return;
+    }
 
     const allStats: CompileStats = {
         errors: 0,

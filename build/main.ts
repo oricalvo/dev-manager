@@ -1,6 +1,6 @@
 import {registerService} from "oc-tools/serviceLocator";
 import {createLogger, createWinstonLogger, LOGGER} from "../src/common/logger";
-import {copyFile, copyGlob, deleteDirectory, ensureDirectory} from "oc-tools/fs";
+import {copyFile, copyGlob, deleteDirectory, ensureDirectory, readJSONFile, writeJSONFile} from "oc-tools/fs";
 import {spawn} from "oc-tools/process";
 
 const logger = createLogger("main");
@@ -25,6 +25,10 @@ export async function pack() {
     await deleteDirectory("./package/cli");
 
     await copyFile("./package.json", "package/package.json");
+
+    const packageJson = await readJSONFile("package/package.json");
+    delete packageJson.devDependencies;
+    await writeJSONFile("package/package.json", packageJson, 4);
 }
 
 export async function patch() {
