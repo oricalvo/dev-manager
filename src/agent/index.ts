@@ -9,6 +9,7 @@ export class BuildAgent {
     port: number;
     config: WorkspaceConfig;
     timeoutId;
+    disposed: boolean = false;
 
     constructor(public name: string) {
     }
@@ -23,6 +24,10 @@ export class BuildAgent {
             await this.ping();
 
             const schedule = () => {
+                if(this.disposed) {
+                    return;
+                }
+
                 this.timeoutId = setTimeout(async ()=> {
                     await this.ping();
 
@@ -38,8 +43,13 @@ export class BuildAgent {
     }
 
     dispose() {
+        if(this.disposed) {
+            throw new Error("Already disposed");
+        }
+
         clearTimeout(this.timeoutId);
         this.timeoutId = 0;
+        this.disposed = true;
     }
 
     async ping() {

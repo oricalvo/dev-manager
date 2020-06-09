@@ -1,5 +1,3 @@
-import {Logger} from "./logger";
-
 export interface Using {
     <T, R>(factory: T|Promise<T>, task: (obj: T)=>R|Promise<R>): Promise<R>;
     <T1, T2, R>(factory1: T1|Promise<T1>, factory2: T2|Promise<T2>, task: (obj1: T1, obj2: T2)=>R|Promise<R>): Promise<R>;
