@@ -14,8 +14,6 @@ import {fileExists, readJSONFile} from "oc-tools/fs";
 import {using} from "../common/object.helpers";
 import {LineReader} from "../common/lineReader";
 import {ExecutionContext} from "../common/executionContext";
-import {TsProject, TsWorkspace} from "../common/tsConfigReader";
-import {TsConfigReader} from "../common/tsConfigReader";
 
 const logger = createLogger();
 
@@ -85,43 +83,77 @@ export async function main() {
 }
 
 async function start(names) {
-    validateNames(names);
-
     const config = await loadConfigFrom(process.cwd());
 
+    await internalServerStart(config);
+
+    await internalStart(config, names);
+}
+
+async function internalStart(config: WorkspaceConfig, names: string[]) {
+    validateNames(names);
+
     await startApps(config, names);
-    await list();
+    await internalList(config);
 }
 
 async function run(names) {
+    const config = await loadConfigFrom(process.cwd());
+
+    await internalServerStart(config);
+
+    await internalRun(config, names);
+}
+
+async function internalRun(config: WorkspaceConfig, names: string[]) {
     validateNames(names);
 
-    const config = await loadConfigFrom(process.cwd());
     await runApps(config, names);
 }
 
 async function restart(names, showList: boolean) {
+    const config = await loadConfigFrom(process.cwd());
+
+    await internalServerStart(config);
+
+    await internalRestart(config, names, showList);
+}
+
+async function internalRestart(config: WorkspaceConfig, names: string[], showList: boolean) {
     validateNames(names);
 
-    const config = await loadConfigFrom(process.cwd());
     await restartApps(config, names);
     if(showList) {
         await list();
     }
 }
 
-async function stop(names) {
+async function stop(names: string[]) {
+    const config = await loadConfigFrom(process.cwd());
+
+    await internalServerStart(config);
+
+    await internalStop(config, names);
+}
+
+async function internalStop(config: WorkspaceConfig, names: string[]) {
     validateNames(names);
 
-    const config = await loadConfigFrom(process.cwd());
     await stopApps(config, names);
     await list();
 }
 
 async function enable(names, enable: boolean) {
+    const config = await loadConfigFrom(process.cwd());
+
+    await internalServerStart(config);
+
+    await internalEnable(config, names, enable);
+}
+
+async function internalEnable(config: WorkspaceConfig, names: string[], enable: boolean) {
     validateNames(names);
 
-    const config = await loadConfigFrom(process.cwd());
     await enableApps(config, names, enable);
     await list();
 }
@@ -165,12 +197,6 @@ async function build(args: string[]) {
 
         console.log(tsconfigs);
 
-        // const reader = new TsConfigReader();
-        // const workspace: TsWorkspace = await reader.read(tsconfigs);
-        // workspace.walk(async project => {
-        //     logger.debug(project.filePath);
-        // })
-
         return;
     }
 
@@ -199,6 +225,7 @@ async function build(args: string[]) {
 
 async function server(args: string[]) {
     const cmd = args[0];
+
     if(cmd == "start" || !cmd) {
         await serverStart();
     }
@@ -251,6 +278,12 @@ function resolveVars(str: string, vars: object) {
 async function log(args: string[]) {
     const config = await loadConfigFrom(process.cwd());
 
+    await internalServerStart(config);
+
+    await internalLog(config, args);
+}
+
+async function internalLog(config: WorkspaceConfig, args: string[]) {
     const appName = args[0];
     if(!appName) {
         throw new Error("appName parameter is missing");
@@ -283,9 +316,14 @@ async function config(args: string[]) {
 }
 
 async function serverStart() {
+    const config = await loadConfigFrom(process.cwd());
+
+    await internalServerStart(config);
+}
+
+async function internalServerStart(config: WorkspaceConfig) {
     try {
         await BuildProxy.alive();
-        throw new DMError("DM server is already running");
     }
     catch(err) {
         if(err.code == "ECONNREFUSED") {
@@ -327,6 +365,12 @@ async function serverStop() {
 async function list() {
     const config = await loadConfigFrom(process.cwd());
 
+    await internalServerStart(config);
+
+    await internalList(config);
+}
+
+async function internalList(config: WorkspaceConfig) {
     const proxy = new BuildProxy(config);
     const apps: AppDTO[] = await proxy.list();
 
@@ -344,7 +388,6 @@ async function list() {
         logger.debug(line);
     }
 }
-
 
 function compileTsc(build: BuildConfig, force: boolean): Promise<CompileStats> {
     return new Promise(async (resolve, reject)=> {
